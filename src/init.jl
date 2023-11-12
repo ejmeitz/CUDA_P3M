@@ -7,6 +7,7 @@ using TimerOutputs
 
 #include all files here
 include("types.jl")
+include("dump_parser.jl")
 include("test.jl")
 include("P3M.jl")
 
