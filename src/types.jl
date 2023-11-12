@@ -18,7 +18,7 @@ struct P3M
 end
 
 #Overload call operator to evalulate energies/forces
-(p3m::P3M)() = eval_P3M(p3m.pp, p3m.pm)
+(p3m::P3M)(atoms::StructArray{Atom}) = eval_P3M(p3m.pp, p3m.pm, atoms)
 
 
 struct PM

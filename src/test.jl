@@ -31,3 +31,15 @@ function load_test_data()
 
     return trajectory, charges, masses, coul_energies, forces_all
 end
+
+function compare_to_lammps(lammps_forces, lammps_energies, my_forces, my_energies)
+
+end
+
+function compare_to_bruteforce(bf_forces, bf_energies, my_forces, my_energies)
+
+end
+
+function log_step(filename, forces, energies)
+
+end
