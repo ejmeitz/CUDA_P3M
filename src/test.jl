@@ -43,3 +43,9 @@ end
 function log_step(filename, forces, energies)
 
 end
+
+#Runs MD to manually calculate teh energy/force of the water system simulated in LAMMPS
+#Should brute force the Coulombic term to get a "ground truth" for quantifying error
+function MD_loop()
+
+end
