@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+
+<html>
+    <head>
+        <title>CUDA P3M Proposal</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 20px;
+            }
+    
+            h2 {
+                color: #333;
+            }
+    
+            p, ol {
+                color: #333;
+                margin-bottom: 15px;
+            }
+
+
+            li {
+                margin-bottom: 5px;
+            }
+        </style>
+        <script type="text/javascript" async
+            src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML">
+        </script>
+        <script type="text/x-mathjax-config">
+            MathJax.Hub.Config({
+                tex2jax: {
+                    inlineMath: [['$', '$'], ['\\(', '\\)']],
+                    processEscapes: true
+                },
+                "HTML-CSS": {
+                    linebreaks: {
+                        automatic: true
+                    },
+                    scale: 85
+                },
+                SVG: {
+                    linebreaks: {
+                        automatic: true
+                    }
+                }
+            });
+        </script>
+    </head>
+<body>
+    <h1>Project Proposal</h1>
+
+    <section>
+        <h2>Summary</h2>
+        <p> We will implement the Particle-Particle Particle-Mesh method for calculating the Coulombic interactions in a system of charged particles using CUDA.jl. We will verify our implementation is correct by comparing to a direct sum on the CPU and benchmark performance by comparing to MPI implementations in open source molecular dynamics codes (e.g. LAMMPS/HOOMD).</p>
+    </section>
+
+    <section>
+        <h2>Background</h2>
+        <p>We plan to implement a parallel algorithm for calculating long range interactions in molecular dynamics (MD) simulations. In MD many interatomic potentials decay rapidly with separation distance and allows the programmer to ignore interactions between far-apart particles when calculating energies and forces. This approximation cannot be made for Coulombic or gravitational interactions where the energy goes as 1/r. Summing interactions of this form result in a slowly converging sum that requires interactions over all distances to be taken into account. To reduce computational cost, researchers developed several methods such as Ewald sums and the fast multipole method; however, we will focus on the most performant and commonly used method the particle-particle particle-mesh method (P3M). In the P3M algorithm, the energies and forces are split into short and long range components:
+        </p>
+        <div id="equation">
+            \[E_{\text{tot}} = E_{\text{sr}} + E_{\text{lr}}\]
+
+        </div>
+        <p>
+        the short range component is calculated via the particle-particle approach and the long range component is calculated via the particle-mesh approach. In the particle-particle approach, interactions are summed through a traditional force loop that makes use of neighbor lists and scales linearly with the system size. The particle-mesh approach projects the discrete charges onto a mesh which is interpolated via B-splines. The resulting charge field is converted into the Fourier domain where the sum converges rapidly.
+        </p>
+        <p>
+            This code can naturally be parallelized because the force/energy summation for an individual particle is (nearly) independent from all other particles. Furthermore, the FFT used in the particle-mesh approach is readily parallelized over grid points. This problem can also be decomposed spatially like in HW3 and HW4 where we would then use CUDA aware MPI to break the problem down even more. We will follow the diagram below to implement P3M in parallel on a GPU:
+        </p>
+    </section>
+
+    <section>
+        <h2>The Challenge</h2>
+        <p>
+            We have identified four major challenges when implementing P3M on GPU(s):
+        </p>
+        <ol>
+            <li>Particles will not necessarily interact with the particles adjacent to them in memory leading to uncoalesced memory access and poor GPU performance.
+            <li> Communication will be negligible in the one GPU case as most of the calculation can be done on the GPU and the results sent back to the CPU. With MPI we will implement a scheme similar to HW4 but in 3D and with periodic boundary conditions. This will result in some computation but we can hide it with computation.</li>
+            <li>The particle-particle method will likely be much more efficient than the particle-mesh and could result in load-balancing issues.</li>
+            <li>Re-implementing neighbor lists to match the memory requirements of GPU code (e.g. coalesced access). The tree format from HW3 and HW4 is not amenable to this, at least not without modifications.</li>
+        </ol>
+
+        <p>
+        By overcoming these challenges we hope to learn CUDA aware MPI, the advantages/disadvantages of using CUDA/MPI in Julia, and how to use the CUDA libraries (specifically cuFFT).
+        </p>
+    </section>
+
+    <section>
+        <h2>Resources</h2>
+        <p>Outline the resources, both human and material, allocated for the project.</p>
+    </section>
+
+    <section>
+        <h2>Goals and Deliverables</h2>
+        <p>Specify the goals and expected deliverables of the project.</p>
+    </section>
+
+    <section>
+        <h2>Platform Choice</h2>
+        <p>Explain the choice of platform (technological or otherwise) for the project.</p>
+    </section>
+
+    <section>
+        <h2>Schedule</h2>
+        <p>This is our rough schedule. We will only attempt to adapt the code to multiple GPUs once our original code is ported to a single GPU. This may not be completed and is a lofty goal, but something that would be useful if we can figure it out. Should the multi-GPU approach fail, we might try and use the KernalAbstractions framework to target arbitrary GPU backends. We will update the schedule if we make this decision.</p>
+
+        <ul>
+            <li>11/13 Implement P3M in serial on CPU (reference code)</li>
+            <li>11/20 Convert serial code to GPU code, benchmark against LAMMPS</li>
+            <li>11/27: Adapt code to use multiple GPUs, Write project milestone</li>
+            <li>12/4 Start working on poster</li>
+            <li>12/11 Submit final project report</li>
+        </ul>
+    </section>
+</body>
+</html>
