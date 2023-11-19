@@ -1,5 +1,8 @@
 include("init.jl")
 
+#Interesting info from GROMACS on parallelization strategy
+# https://manual.gromacs.org/current/reference-manual/algorithms/parallelization-domain-decomp.html#mpmdpme
+
 #& Double check these are being parsed correctly
 # Lammps can only give you coulombic energies, not forces
 # will need to calculate the LJ part of the force manually and subtract.
