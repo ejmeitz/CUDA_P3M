@@ -4,11 +4,7 @@ import matplotlib.pyplot as plt
 import scipy.special as ss
 import math
 
-
-def load_system(dump_path : str):
-    #Just parse lammps dump file that has x y z charge mass info
-    pass
-
+from .helper import *
 
 #Calculate E_direct
 def particle_particle(r, q, alpha, r_cut):
@@ -16,10 +12,15 @@ def particle_particle(r, q, alpha, r_cut):
     U_direct = np.zeros(N_atoms)
     F_direct = np.zeros(N_atoms)
 
-    n = 2 # WTF should this be?? I think loops should be over (0,1), feel like maybe needs to be 2 if domain is triclinic and super tilted
-    for n1 in range(n): # Why cant we just use nearest mirror conventions?
-        for n2 in range(n):
-            for n3 in range(n):
+
+    #Calculate number of cells in each direction that could be reached given r_cut
+    #* Can be pre-calculated outside of function
+    N1,N2,N3 = get_N_cells(r_cut)
+
+
+    for n1 in range(-N1,N1+1):
+        for n2 in range(-N2,N2+1):
+            for n3 in range(-N3,N3+1):
 
                 if n1 == 0 and n2 == 0 and n3 == 0:
                     continue 
@@ -119,6 +120,11 @@ if __name__ == "__main__":
     error_tol = 1e-5 #on GPU OpenMM warns this is lower limit and error can start going up (should check when we do GPU)
     spline_interp_order = 5 # paper uses 3,5,7 in tests
     dump_path = r"c"
+
+
+    lattice_param = 5.43 #Angstroms
+    lat_vecs = np.array([[lattice_param,0,0],[0,0,lattice_param],[0,0,lattice_param]]) #often denoted a
+    recip_lat_vecs = reciprocal_vecs(lat_vecs)
 
     #positions are (Nx3) masses, charges (Nx1), boxsize (3x1)
     positions, masses, charges, box_size = load_system(dump_path)
