@@ -4,6 +4,7 @@ def load_system(dump_path : str):
     #Just parse lammps dump file that has x y z charge mass info
     pass
 
+
 #same idea as: https://github.com/Jonas-Finkler/ewald-summation/blob/6c399ba021184c1ca66540642ab0b0d8f236cce3/src/atoms/pointsets.f90#L121
 #returns the number of cells in the direction of each lattice vector that are needed to find all neighbors within cutoff
 def get_N_cells(lattice_vecs, r_cut):
@@ -25,8 +26,11 @@ def get_N_cells(lattice_vecs, r_cut):
 
     return n.astype(int)
 
+def vol(lat_vecs):
+    return np.dot(lat_vecs[:,0],np.cross(lat_vecs[:,1], lat_vecs[:,2]))
+
 def reciprocal_vecs(lat_vecs):
-    V = np.dot(lat_vecs[:,0],np.cross(lat_vecs[:,1], lat_vecs[:,2]))
+    V = vol(lat_vecs)
     m1 = np.cross(lat_vecs[:,1], lat_vecs[:,2])/V
     m2 = np.cross(lat_vecs[:,2], lat_vecs[:,0])/V
     m3 = np.cross(lat_vecs[:,0], lat_vecs[:,1])/V
