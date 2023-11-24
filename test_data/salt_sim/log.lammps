@@ -1,0 +1,106 @@
+LAMMPS (3 Aug 2022)
+OMP_NUM_THREADS environment is not set. Defaulting to 1 thread. (src/comm.cpp:98)
+  using 1 OpenMP thread(s) per MPI task
+Loaded 1 plugins from C:\Users\ejmei\AppData\Local\LAMMPS 64-bit 3Aug2022\plugins
+# LAMMPS input script for NaCl crystal simulation with real units
+
+units real
+dimension 3
+boundary p p p
+
+# Atom definition
+atom_style charge
+read_data salt3UC.positions
+Reading data file ...
+  orthogonal box = (0 0 0) to (16.86 16.86 16.86)
+  1 by 1 by 1 MPI processor grid
+  reading atoms ...
+  216 atoms
+  reading velocities ...
+  216 velocities
+  read_data CPU = 0.004 seconds
+
+# Define groups
+group Na type 1
+108 atoms in group Na
+group Cl type 2
+108 atoms in group Cl
+
+# Set up pair style and coefficients
+pair_style lj/cut/coul/long 9.0
+kspace_style ewald 1e-5
+
+#https://www.hindawi.com/journals/jchem/2020/6661196/
+pair_coeff 1 1 0.1 2.583
+pair_coeff 1 2 0.1 3.492
+pair_coeff 2 2 0.1 4.401
+
+
+timestep 2.0
+
+compute 1 all pe/atom
+#compute 2 all pair lj/cut/coul/long ecoul
+#compute 3 all pair lj/cut/coul/long evdwl
+
+variable T equal 300
+velocity all create ${T} 31454 dist gaussian mom yes
+velocity all create 300 31454 dist gaussian mom yes
+
+
+# Run simulation
+fix 1 all nve
+dump data all custom 10000 dump.atom id x y z fx fy fz c_1 #c_2 c_3
+dump_modify data sort id
+run 100000
+Ewald initialization ...
+  using 12-bit tables for long-range coulomb (src/kspace.cpp:342)
+  G vector (1/distance) = 0.3435056
+  estimated absolute RMS force accuracy = 0.0035141333
+  estimated relative force accuracy = 1.0582708e-05
+  KSpace vectors: actual max1d max3d = 462 6 1098
+                  kxmax kymax kzmax  = 6 6 6
+Generated 0 of 1 mixed pair_coeff terms from geometric mixing rule
+Neighbor list info ...
+  update every 1 steps, delay 10 steps, check yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 11
+  ghost atom cutoff = 11
+  binsize = 5.5, bins = 4 4 4
+  1 neighbor lists, perpetual/occasional/extra = 1 0 0
+  (1) pair lj/cut/coul/long, perpetual
+      attributes: half, newton on
+      pair build: half/bin/atomonly/newton
+      stencil: half/bin/3d
+      bin: standard
+Per MPI rank memory allocation (min/avg/max) = 15.08 | 15.08 | 15.08 Mbytes
+   Step          Temp          E_pair         E_mol          TotEng         Press     
+         0   300           -19506.546      0             -19314.284      101920.13    
+    100000   146.36605     -19407.494      0             -19313.692      105973.86    
+Loop time of 196.875 on 1 procs for 100000 steps with 216 atoms
+
+Performance: 87.771 ns/day, 0.273 hours/ns, 507.937 timesteps/s
+96.1% CPU use with 1 MPI tasks x 1 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 66.206     | 66.206     | 66.206     |   0.0 | 33.63
+Kspace  | 128.24     | 128.24     | 128.24     |   0.0 | 65.14
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 1.5908     | 1.5908     | 1.5908     |   0.0 |  0.81
+Output  | 0.017139   | 0.017139   | 0.017139   |   0.0 |  0.01
+Modify  | 0.44337    | 0.44337    | 0.44337    |   0.0 |  0.23
+Other   |            | 0.374      |            |       |  0.19
+
+Nlocal:            216 ave         216 max         216 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:           1981 ave        1981 max        1981 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:          27000 ave       27000 max       27000 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 27000
+Ave neighs/atom = 125
+Neighbor list builds = 0
+Dangerous builds = 0
+Total wall time: 0:03:16
