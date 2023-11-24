@@ -35,3 +35,54 @@ def reciprocal_vecs(lat_vecs):
     m2 = np.cross(lat_vecs[:,2], lat_vecs[:,0])/V
     m3 = np.cross(lat_vecs[:,0], lat_vecs[:,1])/V
     return np.array([m1,m2,m3])
+
+def nearest_mirror(r_ij,box_sizes):
+    Lx,Ly,Lz = box_sizes
+    r_x,r_y,r_z = r_ij
+        
+    if r_x > Lx/2:
+        r_x -= Lx
+    elif r_x < -Lx/2:
+        r_x += Lx
+        
+    if r_y > Ly/2:
+        r_y -= Ly
+    elif r_y < -Ly/2:
+        r_y += Ly 
+        
+    if r_z > Lz/2:
+        r_z -= Lz
+    elif r_z < -Lz/2:
+        r_z += Lz
+
+    return np.array([r_x,r_y,r_z])
+
+#To calculate LJ part of interaction
+def lj_energy_loop(positions, charges, box_sizes, r_cut_real):
+    N_atoms = len(charges)
+
+    forces = np.zeros(N_atoms, 3)
+    U = np.zeros(N_atoms)
+
+    for i in range(N_atoms):
+        for j in range(i+1, N_atoms):
+            r_ij = positions[i] - positions[j]
+            r_ij = nearest_mirror(r_ij, box_sizes)
+
+            dist_ij = np.norm(r_ij)
+
+            if dist_ij < r_cut_real:
+
+                if charges[i] == 1.0 and charges[j] == 1.0: #both Na
+                    U_ij, F_ij = None, None
+                elif charges[i] == -1 and charges[j] == -1 #both Cl
+                    U_ij, F_ij = None, None
+                else: #Na + Cl
+                    U_ij, F_ij = None, None
+
+                r_hat = r_ij / dist_ij 
+                F_ij = F_ij*r_hat
+
+                forces[i,:] += F_ij
+                forces[j,:] -= F_ij
+                U[i] += U_ij
