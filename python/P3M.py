@@ -128,18 +128,19 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
                  
                 #* not sure this loop is right
                 #& my current interpretation is that for a given grid point (k1,k2,k3) get contribution from all other grid pts
-                for p1 in range(K1):
-                    for p2 in range(K2):
-                        for p3 in range(K3):                            
-                            for i in range(N_atoms):
+                for i in range(N_atoms):
+                    for p1 in range(K1):
+                        for p2 in range(K2):
+                            for p3 in range(K3):                            
                                 u0 = u[i,0] - k1 - p1*K1; u1 = u[i,1]- k2 - p2*K2; u2 = u[i,2] - k3 - p3*K3
 
                                 I = dMdu(u0,sio) * M(u1,sio) * M(u2,sio)
                                 II = M(u0,sio) * dMdu(u1,sio) * M(u2,sio)
                                 III = M(u0,sio) * M(u1,sio) * dMdu(u2,sio)
 
-                                #dQdr_i0 #& not sure indexing is right on recip_lat
                                 v[0] = K1*I; v[1] = K2*II; v[2] = K3*III
+
+                                #dQdr_i0
                                 dQdr[i, 0, k1, k2, k3] += np.sum(recip_lat[:,0] * v)
                                 #dQdr_i1
                                 dQdr[i, 1, k1, k2, k3] += np.sum(recip_lat[:,1] * v)
@@ -254,7 +255,7 @@ if __name__ == "__main__":
         print(f"\t LJ Energy Calculated")
         #TBH no clue how to use this
         # i_inds, j_inds, _ = cl.neighborlist(positions[:,:,i], r_cut_neighbor, unitcell=np.array([1, 1, 1]))
-        # U_SPME, F_SPME = PME(positions[:,:,i], charges, real_lat_vecs, error_tol, r_cut_real, spline_interp_order)
+        U_SPME, F_SPME = PME(positions[:,:,i], charges, real_lat_vecs, error_tol, r_cut_real, spline_interp_order)
         # print(f"\t PME Energy Calculated")
 
         # rms_eng_error = rms_error(U_SPME + U_LJ, forces_lmp)
