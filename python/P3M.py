@@ -50,8 +50,13 @@ def particle_particle(r, q, alpha, r_cut, real_lat):
 def M(u, n):
     if n > 2:
         return (u/(n-1))*M(u,n-1) + ((n-u)/(n-1))*M(u-1,n-1)
+    elif n == 2:
+        if u >= 0 and u <= 2:
+            return 1 - np.abs(u-1)
+        else:
+            return 0
     else:
-        return 1 - np.abs(u-1)
+        print("Shouldn't be here")
 
 #equivalent, time to see whats faster
 # def M(u, n):
@@ -260,7 +265,9 @@ if __name__ == "__main__":
         U_SPME, F_SPME = PME(positions[:,:,i], charges, real_lat_vecs, error_tol, r_cut_real, spline_interp_order)
         # print(f"\t PME Energy Calculated")
 
-        # rms_eng_error = rms_error(U_SPME + U_LJ, forces_lmp)
+        print(U_SPME)
+        print(np.sum(U_SPME))
+        # rms_eng_error = rms_error(U_SPME + U_LJ, forces_lmp)p
         # rms_force_error = rms_error(F_SPME + F_LJ, eng_lmp) #force format might not work since its Nx3
 
 
