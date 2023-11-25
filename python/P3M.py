@@ -191,12 +191,14 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
 
 
     L = np.array([np.linalg.norm(real_lat_vec[i,:]) for i in range(real_lat_vec.shape[0])])
-
+    print(L)
     # OpenMM parameterizes like this:
     # http://docs.openmm.org/latest/userguide/theory/02_standard_forces.html#coulomb-interaction-with-particle-mesh-ewald
     alpha = np.sqrt(-np.log(2*error_tol))/r_cut_real
     #Look at FFT implementation it can be better if this is a factor of some prime number
-    n_mesh = np.ceil(2*alpha*L/(3*np.power(error_tol, 0.2))).astype(np.int64) #assumes cubic box
+    n_mesh = np.ceil(2*alpha*L/(3*np.power(error_tol, 0.2))).astype(np.int64)
+
+    n_mesh = [6,6,6] #idk its slow as shit with that eqn ^
 
     pp_energy, pp_force = particle_particle(r, q, alpha, r_cut_real, real_lat_vec)
     print(f"\tP-P Energy Calculated")
@@ -234,7 +236,7 @@ if __name__ == "__main__":
     r_cut_real = 10.0 #kinda picked randomly
     r_cut_neighbor = r_cut_real + 1.0 #not sure what this should be
     error_tol = 1e-4 #GPU OpenMM warns 5e-5 is lower limit and error can start going up (should check when we do GPU)
-    spline_interp_order = 4
+    spline_interp_order = 5 #OpenMM uses 5
 
 
     dump_path = os.path.join(r"C:\Users\ejmei\Repositories\CUDA_P3M\test_data\salt_sim\dump.atom")
