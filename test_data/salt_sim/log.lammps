@@ -49,7 +49,7 @@ velocity all create 300 31454 dist gaussian mom yes
 
 # Run simulation
 fix 1 all nve
-dump data all custom 10000 dump.atom id x y z fx fy fz c_1 #c_2 c_3
+dump data all custom 10000 dump.atom id q mass x y z fx fy fz c_1 #c_2 c_3
 dump_modify data sort id
 run 100000
 Ewald initialization ...
@@ -76,21 +76,21 @@ Per MPI rank memory allocation (min/avg/max) = 15.08 | 15.08 | 15.08 Mbytes
    Step          Temp          E_pair         E_mol          TotEng         Press     
          0   300           -19506.546      0             -19314.284      101920.13    
     100000   146.36605     -19407.494      0             -19313.692      105973.86    
-Loop time of 196.875 on 1 procs for 100000 steps with 216 atoms
+Loop time of 169.964 on 1 procs for 100000 steps with 216 atoms
 
-Performance: 87.771 ns/day, 0.273 hours/ns, 507.937 timesteps/s
-96.1% CPU use with 1 MPI tasks x 1 OpenMP threads
+Performance: 101.669 ns/day, 0.236 hours/ns, 588.360 timesteps/s
+82.4% CPU use with 1 MPI tasks x 1 OpenMP threads
 
 MPI task timing breakdown:
 Section |  min time  |  avg time  |  max time  |%varavg| %total
 ---------------------------------------------------------------
-Pair    | 66.206     | 66.206     | 66.206     |   0.0 | 33.63
-Kspace  | 128.24     | 128.24     | 128.24     |   0.0 | 65.14
+Pair    | 57.83      | 57.83      | 57.83      |   0.0 | 34.02
+Kspace  | 109.6      | 109.6      | 109.6      |   0.0 | 64.49
 Neigh   | 0          | 0          | 0          |   0.0 |  0.00
-Comm    | 1.5908     | 1.5908     | 1.5908     |   0.0 |  0.81
-Output  | 0.017139   | 0.017139   | 0.017139   |   0.0 |  0.01
-Modify  | 0.44337    | 0.44337    | 0.44337    |   0.0 |  0.23
-Other   |            | 0.374      |            |       |  0.19
+Comm    | 1.648      | 1.648      | 1.648      |   0.0 |  0.97
+Output  | 0.016882   | 0.016882   | 0.016882   |   0.0 |  0.01
+Modify  | 0.47376    | 0.47376    | 0.47376    |   0.0 |  0.28
+Other   |            | 0.3919     |            |       |  0.23
 
 Nlocal:            216 ave         216 max         216 min
 Histogram: 1 0 0 0 0 0 0 0 0 0
@@ -103,4 +103,4 @@ Total # of neighbors = 27000
 Ave neighs/atom = 125
 Neighbor list builds = 0
 Dangerous builds = 0
-Total wall time: 0:03:16
+Total wall time: 0:02:49

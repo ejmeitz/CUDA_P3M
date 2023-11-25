@@ -34,6 +34,6 @@ velocity all create ${T} 31454 dist gaussian mom yes
 
 # Run simulation
 fix 1 all nve
-dump data all custom 10000 dump.atom id x y z fx fy fz c_1 #c_2 c_3
+dump data all custom 10000 dump.atom id q mass x y z fx fy fz c_1 #c_2 c_3
 dump_modify data sort id
 run 100000

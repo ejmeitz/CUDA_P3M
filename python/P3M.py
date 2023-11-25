@@ -1,11 +1,12 @@
-import CellListMap as cl #neighbor list builder from Julia: https://m3g.github.io/CellListMap.jl/stable/python/
+# import CellListMap as cl #neighbor list builder from Julia: https://m3g.github.io/CellListMap.jl/stable/python/
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.special as ss
 import scipy.signal as sig
+import os
 import math
 
-from .helper import *
+from helper import *
 
 #similar code: https://github.com/jht0664/structurefactor_spme/blob/master/run_sq.py
 
@@ -26,18 +27,18 @@ def particle_particle(r, q, alpha, r_cut, real_lat):
         for n2 in range(-N2,N2+1):
             for n3 in range(-N3,N3+1):
 
-                n_vec = np.array(n1,n2,n3)
+                n_vec = np.array([n1,n2,n3])
                 
                 #How tf u use neighbor lists here
                 for i in range(N_atoms):
                     for j in range(i+1, N_atoms): #they had from 1-N and divide by 2 at end, check that its the same
 
                         r_ijn = r[j] - r[i] + n_vec
-                        dist_ijn = np.norm(r_ijn)
+                        dist_ijn = np.linalg.norm(r_ijn)
 
                         if dist_ijn < r_cut:
                             U_direct[i] += q[i] * q[j] * ss.erfc(alpha*dist_ijn) / dist_ijn
-                            F_ij = q[i] * q[j] * something #TODO
+                            F_ij = q[i] * q[j] #TODO  #TODO
 
                             F_direct[i] += F_ij
                             F_direct[j] -= F_ij #on GPU this is not worth doing
@@ -97,7 +98,7 @@ def calc_BC(alpha, V, K1, K2, K3, n):
 
 
 #Calculate E_reciprocal
-def particle_mesh(r, q, real_lat, alpha, spline_interp_order, k_max, mesh_dims):
+def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
 
     N_atoms = len(q)
 
@@ -177,22 +178,20 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, k_max, mesh_dims):
     return E_out, F_out
 
 
-
 def self_energy(q, alpha):
    return -(alpha/np.sqrt(np.pi)) * np.sum(np.square(q))
-
 
 
 def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
 
 
-    L = [np.norm(real_lat_vec[i,:]) for i in range(real_lat_vec.shape[0])]
+    L = np.array([np.linalg.norm(real_lat_vec[i,:]) for i in range(real_lat_vec.shape[0])])
 
     # OpenMM parameterizes like this:
     # http://docs.openmm.org/latest/userguide/theory/02_standard_forces.html#coulomb-interaction-with-particle-mesh-ewald
     alpha = np.sqrt(-np.log(2*error_tol))/r_cut_real
     #Look at FFT implementation it can be better if this is a factor of some prime number
-    n_mesh = np.ceil(2*alpha*L/(3*np.power(error_tol, 0.2))) #assumes cubic box
+    n_mesh = np.ceil(2*alpha*L/(3*np.power(error_tol, 0.2))).astype(np.int64) #assumes cubic box
 
     pp_energy, pp_force = particle_particle(r, q, alpha, r_cut_real, real_lat_vec)
     pm_energy, pm_force = particle_mesh(r, q, real_lat_vec, alpha, spline_interp_order, n_mesh)
@@ -228,25 +227,29 @@ if __name__ == "__main__":
     error_tol = 1e-5 #on GPU OpenMM warns this is lower limit and error can start going up (should check when we do GPU)
     spline_interp_order = 5
 
-    dump_path = r"c"
+
+    dump_path = os.path.join(r"C:\Users\ejmei\Repositories\CUDA_P3M\test_data\salt_sim\dump.atom")
 
 
-    lattice_param = 5.43 #Angstroms
-    real_lat_vecs = np.array([[lattice_param,0,0],[0,0,lattice_param],[0,0,lattice_param]]) #often denoted a
+    lattice_param = 5.62 #Angstroms
+    N_uc = 3
+    real_lat_vecs = np.array([[N_uc*lattice_param,0,0],[0,N_uc*lattice_param,0],[0,0,N_uc*lattice_param]]) #often denoted a
     recip_lat_vecs = reciprocal_vecs(real_lat_vecs)
 
     #positions are (Nx3) masses, charges (Nx1), boxsize (3x1)
-    positions, masses, charges, box_size = load_system(dump_path)
+    N_steps = 11
+    positions, forces_lmp, eng_lmp, masses, charges, box_sizes = load_system(dump_path, N_steps)
 
-    #TBH no clue how to use this
-    i_inds, j_inds, _ = cl.neighborlist(positions, r_cut_neighbor, unitcell=np.array([1, 1, 1]))
+    for i in range(N_steps):
+        print(f"ON LOOP ITERATION {i}")
+        U_LJ, F_LJ = lj_energy_loop(positions[:,:,i], charges, box_sizes, r_cut_real)
 
-    U_SPME, F_SPME = PME(positions, charges, error_tol, r_cut_real, spline_interp_order)
+        #TBH no clue how to use this
+        # i_inds, j_inds, _ = cl.neighborlist(positions[:,:,i], r_cut_neighbor, unitcell=np.array([1, 1, 1]))
+        U_SPME, F_SPME = PME(positions[:,:,i], charges, real_lat_vecs, error_tol, r_cut_real, spline_interp_order)
 
-    ground_truth_energy, ground_truth_force = brute_force_energy(positions, charges)
-
-    rms_eng_error = rms_error(U_SPME, ground_truth_energy)
-    rms_force_error = rms_error(F_SPME, ground_truth_force) #force format might not work since its Nx3
+        rms_eng_error = rms_error(U_SPME + U_LJ, forces_lmp)
+        rms_force_error = rms_error(F_SPME + F_LJ, eng_lmp) #force format might not work since its Nx3
 
 
     
