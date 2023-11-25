@@ -145,7 +145,7 @@ def lj_energy_loop(positions, charges, box_sizes, r_cut_real):
 
                 if charges[i] == 1.0 and charges[j] == 1.0: #both Na
                     U_ij, F_ij = LJ_NaNa(dist_ij)
-                elif charges[i] == -1 and charges[j] == -1: #both Cl
+                elif charges[i] == -1.0 and charges[j] == -1.0: #both Cl
                     U_ij, F_ij = LJ_ClCl(dist_ij)
                 else: #Na + Cl
                     U_ij, F_ij = LJ_NaCl(dist_ij)

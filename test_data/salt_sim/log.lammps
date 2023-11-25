@@ -18,7 +18,7 @@ Reading data file ...
   216 atoms
   reading velocities ...
   216 velocities
-  read_data CPU = 0.004 seconds
+  read_data CPU = 0.002 seconds
 
 # Define groups
 group Na type 1
@@ -27,7 +27,7 @@ group Cl type 2
 108 atoms in group Cl
 
 # Set up pair style and coefficients
-pair_style lj/cut/coul/long 9.0
+pair_style lj/cut/coul/long 7.0 10.0
 kspace_style ewald 1e-5
 
 #https://www.hindawi.com/journals/jchem/2020/6661196/
@@ -39,8 +39,8 @@ pair_coeff 2 2 0.1 4.401
 timestep 2.0
 
 compute 1 all pe/atom
-#compute 2 all pair lj/cut/coul/long ecoul
-#compute 3 all pair lj/cut/coul/long evdwl
+compute 2 all pair lj/cut/coul/long ecoul
+compute 3 all pair lj/cut/coul/long evdwl
 
 variable T equal 300
 velocity all create ${T} 31454 dist gaussian mom yes
@@ -50,57 +50,69 @@ velocity all create 300 31454 dist gaussian mom yes
 # Run simulation
 fix 1 all nve
 dump data all custom 10000 dump.atom id q mass x y z fx fy fz c_1 #c_2 c_3
+fix eng_print all print 10000 "$(c_2) $(c_3)" file energy_breakdown.txt
 dump_modify data sort id
 run 100000
 Ewald initialization ...
   using 12-bit tables for long-range coulomb (src/kspace.cpp:342)
-  G vector (1/distance) = 0.3435056
-  estimated absolute RMS force accuracy = 0.0035141333
-  estimated relative force accuracy = 1.0582708e-05
+  G vector (1/distance) = 0.30830185
+  estimated absolute RMS force accuracy = 0.0033218313
+  estimated relative force accuracy = 1.0003596e-05
   KSpace vectors: actual max1d max3d = 462 6 1098
                   kxmax kymax kzmax  = 6 6 6
 Generated 0 of 1 mixed pair_coeff terms from geometric mixing rule
 Neighbor list info ...
   update every 1 steps, delay 10 steps, check yes
   max neighbors/atom: 2000, page size: 100000
-  master list distance cutoff = 11
-  ghost atom cutoff = 11
-  binsize = 5.5, bins = 4 4 4
+  master list distance cutoff = 12
+  ghost atom cutoff = 12
+  binsize = 6, bins = 3 3 3
   1 neighbor lists, perpetual/occasional/extra = 1 0 0
   (1) pair lj/cut/coul/long, perpetual
       attributes: half, newton on
       pair build: half/bin/atomonly/newton
       stencil: half/bin/3d
       bin: standard
-Per MPI rank memory allocation (min/avg/max) = 15.08 | 15.08 | 15.08 Mbytes
+-9829.5515215678024106 2818.3302827908973995
+Per MPI rank memory allocation (min/avg/max) = 15.17 | 15.17 | 15.17 Mbytes
    Step          Temp          E_pair         E_mol          TotEng         Press     
-         0   300           -19506.546      0             -19314.284      101920.13    
-    100000   146.36605     -19407.494      0             -19313.692      105973.86    
-Loop time of 169.964 on 1 procs for 100000 steps with 216 atoms
+         0   300           -19484.993      0             -19292.731      102492.91    
+-9817.0614700289461325 2891.5008455447359665
+-9816.4677279562274634 2901.2215170205395225
+-9816.9328414781884931 2889.2014156181812723
+-9817.1143987478189956 2904.0440389948985285
+-9811.4938909579086612 2891.5920553902337815
+-9809.5966836410480028 2891.5311265836357961
+-9813.3347859245768632 2898.7136293928238047
+-9811.669144974935989 2896.5699815349876189
+-9814.1505471208092786 2903.3070564676359027
+-9811.8821862118820718 2898.8914411285941242
+    100000   144.74843     -19383.403      0             -19290.637      106346.96    
+Loop time of 102.64 on 1 procs for 100000 steps with 216 atoms
 
-Performance: 101.669 ns/day, 0.236 hours/ns, 588.360 timesteps/s
-82.4% CPU use with 1 MPI tasks x 1 OpenMP threads
+Performance: 168.355 ns/day, 0.143 hours/ns, 974.275 timesteps/s
+81.2% CPU use with 1 MPI tasks x 1 OpenMP threads
 
 MPI task timing breakdown:
 Section |  min time  |  avg time  |  max time  |%varavg| %total
 ---------------------------------------------------------------
-Pair    | 57.83      | 57.83      | 57.83      |   0.0 | 34.02
-Kspace  | 109.6      | 109.6      | 109.6      |   0.0 | 64.49
+Pair    | 50.038     | 50.038     | 50.038     |   0.0 | 48.75
+Kspace  | 51.079     | 51.079     | 51.079     |   0.0 | 49.77
 Neigh   | 0          | 0          | 0          |   0.0 |  0.00
-Comm    | 1.648      | 1.648      | 1.648      |   0.0 |  0.97
-Output  | 0.016882   | 0.016882   | 0.016882   |   0.0 |  0.01
-Modify  | 0.47376    | 0.47376    | 0.47376    |   0.0 |  0.28
-Other   |            | 0.3919     |            |       |  0.23
+Comm    | 1.0988     | 1.0988     | 1.0988     |   0.0 |  1.07
+Output  | 0.007983   | 0.007983   | 0.007983   |   0.0 |  0.01
+Modify  | 0.20193    | 0.20193    | 0.20193    |   0.0 |  0.20
+Other   |            | 0.2142     |            |       |  0.21
 
 Nlocal:            216 ave         216 max         216 min
 Histogram: 1 0 0 0 0 0 0 0 0 0
-Nghost:           1981 ave        1981 max        1981 min
+Nghost:           3159 ave        3159 max        3159 min
 Histogram: 1 0 0 0 0 0 0 0 0 0
-Neighs:          27000 ave       27000 max       27000 min
+Neighs:          36720 ave       36720 max       36720 min
 Histogram: 1 0 0 0 0 0 0 0 0 0
 
-Total # of neighbors = 27000
-Ave neighs/atom = 125
+Total # of neighbors = 36720
+Ave neighs/atom = 170
 Neighbor list builds = 0
 Dangerous builds = 0
-Total wall time: 0:02:49
+Total wall time: 0:01:42

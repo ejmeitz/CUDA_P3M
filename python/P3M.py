@@ -117,7 +117,10 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
     Q = np.zeros((K1, K2, K3))
     dQdr = np.zeros((N_atoms, 3, K1, K2, K3)) #deriv in real space
     BC = calc_BC(alpha, V, K1, K2, K3, spline_interp_order)
+    sio = spline_interp_order #just alias
 
+    v = [0.0,0.0,0.0] #pre-alloc
+    
     for k1 in range(K1):
         for k2 in range(K2):
             for k3 in range(K3):
@@ -131,22 +134,23 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
                             for i in range(N_atoms):
                                 u0 = u[i,0] - k1 - p1*K1; u1 = u[i,1]- k2 - p2*K2; u2 = u[i,2] - k3 - p3*K3
 
-                                I = dMdu(u0) * M(u1) * M(u2)
-                                II = M(u0) * dMdu(u1) * M(u2)
-                                III = M(u0) * M(u1) * dMdu(u2)
+                                I = dMdu(u0,sio) * M(u1,sio) * M(u2,sio)
+                                II = M(u0,sio) * dMdu(u1,sio) * M(u2,sio)
+                                III = M(u0,sio) * M(u1,sio) * dMdu(u2,sio)
 
                                 #dQdr_i0 #& not sure indexing is right on recip_lat
-                                dQdr[i, 0, k1, k2, k3] += (K1 * recip_lat[0,0] * I) + (K2 * recip_lat[1,0] * II) + (K3 * recip_lat[2,0]  * III)
+                                v[0] = K1*I; v[1] = K2*II; v[2] = K3*III
+                                dQdr[i, 0, k1, k2, k3] += np.sum(recip_lat[:,0] * v)
                                 #dQdr_i1
-                                dQdr[i, 1, k1, k2, k3] += (K1 * recip_lat[0,1] * I) + (K2 * recip_lat[1,1] * II) + (K3 * recip_lat[2,1]  * III)
+                                dQdr[i, 1, k1, k2, k3] += np.sum(recip_lat[:,1] * v)
                                 #dQdr_i2
-                                dQdr[i, 2, k1, k2, k3] += (K1 * recip_lat[0,2] * I) + (K2 * recip_lat[1,2] * II) + (K3 * recip_lat[2,2]  * III)
+                                dQdr[i, 2, k1, k2, k3] += np.sum(recip_lat[:,2] * v)
 
                                 #Real space charge interpolated onto mesh
-                                Q[k1,k2,k3] += q[i] * M(u0) * M(u1) * M(u2)
+                                Q[k1,k2,k3] += q[i] * M(u0,sio) * M(u1,sio) * M(u2,sio)
                                 
 
-    
+    print("\tQ Calculated")
     #Invert Q (do in place on GPU??)
     Q_recip = np.fft.fftn(Q)
 
@@ -194,7 +198,10 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
     n_mesh = np.ceil(2*alpha*L/(3*np.power(error_tol, 0.2))).astype(np.int64) #assumes cubic box
 
     pp_energy, pp_force = particle_particle(r, q, alpha, r_cut_real, real_lat_vec)
+    print(f"\tP-P Energy Calculated")
+    print(f"\tN-Mesh {n_mesh}")
     pm_energy, pm_force = particle_mesh(r, q, real_lat_vec, alpha, spline_interp_order, n_mesh)
+    print(f"\tP-M Energy Calculated")
     self_eng = self_energy(r, q)
 
     U_SPME = pp_energy + pm_energy + self_eng
@@ -222,10 +229,11 @@ def rms_error(a, b):
 # Figure 1 here: https://www.researchgate.net/publication/225092546_A_Smooth_Particle_Mesh_Ewald_Method
 if __name__ == "__main__":
 
-    r_cut_real = 4.0 #idk this is random
-    r_cut_neighbor = r_cut_real + 1.0 # also not sure what this should be
-    error_tol = 1e-5 #on GPU OpenMM warns this is lower limit and error can start going up (should check when we do GPU)
-    spline_interp_order = 5
+    r_cut_lj = 7.0 #needs to be less then 8 for box size w/ 3 UC
+    r_cut_real = 10.0 #kinda picked randomly
+    r_cut_neighbor = r_cut_real + 1.0 #not sure what this should be
+    error_tol = 1e-4 #GPU OpenMM warns 5e-5 is lower limit and error can start going up (should check when we do GPU)
+    spline_interp_order = 4
 
 
     dump_path = os.path.join(r"C:\Users\ejmei\Repositories\CUDA_P3M\test_data\salt_sim\dump.atom")
@@ -239,17 +247,18 @@ if __name__ == "__main__":
     #positions are (Nx3) masses, charges (Nx1), boxsize (3x1)
     N_steps = 11
     positions, forces_lmp, eng_lmp, masses, charges, box_sizes = load_system(dump_path, N_steps)
-
-    for i in range(N_steps):
+    for i in range(1):
         print(f"ON LOOP ITERATION {i}")
-        U_LJ, F_LJ = lj_energy_loop(positions[:,:,i], charges, box_sizes, r_cut_real)
+        U_LJ, F_LJ = lj_energy_loop(positions[:,:,i], charges, box_sizes, r_cut_lj)
 
+        print(f"\t LJ Energy Calculated")
         #TBH no clue how to use this
         # i_inds, j_inds, _ = cl.neighborlist(positions[:,:,i], r_cut_neighbor, unitcell=np.array([1, 1, 1]))
-        U_SPME, F_SPME = PME(positions[:,:,i], charges, real_lat_vecs, error_tol, r_cut_real, spline_interp_order)
+        # U_SPME, F_SPME = PME(positions[:,:,i], charges, real_lat_vecs, error_tol, r_cut_real, spline_interp_order)
+        # print(f"\t PME Energy Calculated")
 
-        rms_eng_error = rms_error(U_SPME + U_LJ, forces_lmp)
-        rms_force_error = rms_error(F_SPME + F_LJ, eng_lmp) #force format might not work since its Nx3
+        # rms_eng_error = rms_error(U_SPME + U_LJ, forces_lmp)
+        # rms_force_error = rms_error(F_SPME + F_LJ, eng_lmp) #force format might not work since its Nx3
 
 
     
