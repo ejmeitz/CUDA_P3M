@@ -14,7 +14,7 @@ from helper import *
 def particle_particle(r, q, alpha, r_cut, real_lat):
     N_atoms = len(q)
     U_direct = np.zeros(N_atoms)
-    F_direct = np.zeros(N_atoms)
+    F_direct = np.zeros((N_atoms,3))
 
 
     #Calculate number of cells in each direction that could be reached given r_cut
@@ -40,8 +40,11 @@ def particle_particle(r, q, alpha, r_cut, real_lat):
                             U_direct[i] += q[i] * q[j] * ss.erfc(alpha*dist_ijn) / dist_ijn
                             F_ij = q[i] * q[j] #TODO  #TODO
 
-                            F_direct[i] += F_ij
-                            F_direct[j] -= F_ij #on GPU this is not worth doing
+                            r_hat = r_ijn / dist_ijn 
+                            F_ij = F_ij*r_hat
+
+                            F_direct[i,:] += F_ij
+                            F_direct[j,:] -= F_ij #on GPU this is not worth doing
 
     
     return U_direct, F_direct
@@ -101,6 +104,44 @@ def calc_BC(alpha, V, K1, K2, K3, n):
 
     return BC
 
+#& prob adds error, but saves having to eval this func a fuck ton 
+def calc_bsplines(n_spline_vals, n):
+    b_spline_arr = np.empty(n_spline_vals)
+    for i in range(n_spline_vals):
+        b_spline_arr[i] = M(n/np.float_(n_spline_vals)*np.float_(i+1), n)
+    return b_spline_arr
+
+def build_Q(u, n, charges, K1, K2, K3, spline_vals):
+    N_atoms = len(charges)
+    Q = np.zeros((K1, K2, K3))
+    dQdr = np.zeros((N_atoms, 3, K1, K2, K3)) #deriv in real space
+
+    arg = np.empty(3) # distance between (original pt - nearpt), adding one element from range(spline_order)
+    for j in range(N_atoms):
+        nearpt=np.int_(np.floor(u[j,:]))
+        # only need to go to k=0,n-1, for k=n, arg > n, so don't consider this
+        for k1 in range(n):
+            n1 = nearpt[0]-k1
+            arg[0] = u[j,0]-np.float_(n1)
+            n1 = np.mod(n1,K1)
+            for k2 in range(n):
+                n2 = nearpt[1]-k2
+                arg[1] = u[j,1]-np.float_(n2)
+                n2 = np.mod(n2,K2)
+                for k3 in range(n):
+                    n3 = nearpt[2]-k3
+                    arg[2] = u[j,2]-np.float_(n3)
+                    n3 = np.mod(n3,K3)
+                    #orig didnt have the -1 but I needed that to avoid edge case
+                    splindex = np.ceil((arg/n)*np.float_(len(spline_vals))) - 1
+                    splindex = np.int_(splindex) 
+                    Q[n1,n2,n3] += charges[j]*spline_vals[splindex[0]]*spline_vals[splindex[1]]*spline_vals[splindex[2]]
+                    
+                    dQdr[i, 0, k1, k2, k3] += 0.0 #TODO
+                    dQdr[i, 1, k1, k2, k3] += 0.0
+                    dQdr[i, 2, k1, k2, k3] += 0.0
+    return Q, dQdr
+
 
 #Calculate E_reciprocal
 def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
@@ -121,68 +162,59 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
     #Fill Q array (interpolate charge onto grid)
     Q = np.zeros((K1, K2, K3))
     dQdr = np.zeros((N_atoms, 3, K1, K2, K3)) #deriv in real space
-    BC = calc_BC(alpha, V, K1, K2, K3, spline_interp_order)
-    sio = spline_interp_order #just alias
 
-    v = [0.0,0.0,0.0] #pre-alloc
+    spline_vals = calc_bsplines(100000, spline_interp_order)
+    Q, dQdr = build_Q(u, spline_interp_order, charges, K1, K2, K3, spline_vals)
+    print("\tQ Calculated")
+
+    BC = calc_BC(alpha, V, K1, K2, K3, spline_interp_order)
+    # sio = spline_interp_order #just alias
+
+    # v = [0.0,0.0,0.0] #pre-alloc
     
-    for k1 in range(K1):
-        for k2 in range(K2):
-            for k3 in range(K3):
+    # for k1 in range(K1):
+    #     for k2 in range(K2):
+    #         for k3 in range(K3):
 
                  
-                #* not sure this loop is right
-                #& my current interpretation is that for a given grid point (k1,k2,k3) get contribution from all other grid pts
-                for i in range(N_atoms):
-                    for p1 in range(K1):
-                        for p2 in range(K2):
-                            for p3 in range(K3):                            
-                                u0 = u[i,0] - k1 - p1*K1; u1 = u[i,1]- k2 - p2*K2; u2 = u[i,2] - k3 - p3*K3
+    #             #* not sure this loop is right
+    #             #& my current interpretation is that for a given grid point (k1,k2,k3) get contribution from all other grid pts
+    #             for i in range(N_atoms):
+    #                 for p1 in range(K1):
+    #                     for p2 in range(K2):
+    #                         for p3 in range(K3):                            
+    #                             u0 = u[i,0] - k1 - p1*K1; u1 = u[i,1]- k2 - p2*K2; u2 = u[i,2] - k3 - p3*K3
 
-                                I = dMdu(u0,sio) * M(u1,sio) * M(u2,sio)
-                                II = M(u0,sio) * dMdu(u1,sio) * M(u2,sio)
-                                III = M(u0,sio) * M(u1,sio) * dMdu(u2,sio)
+    #                             I = dMdu(u0,sio) * M(u1,sio) * M(u2,sio)
+    #                             II = M(u0,sio) * dMdu(u1,sio) * M(u2,sio)
+    #                             III = M(u0,sio) * M(u1,sio) * dMdu(u2,sio)
 
-                                v[0] = K1*I; v[1] = K2*II; v[2] = K3*III
+    #                             v[0] = K1*I; v[1] = K2*II; v[2] = K3*III
 
-                                #dQdr_i0
-                                dQdr[i, 0, k1, k2, k3] += np.sum(recip_lat[:,0] * v)
-                                #dQdr_i1
-                                dQdr[i, 1, k1, k2, k3] += np.sum(recip_lat[:,1] * v)
-                                #dQdr_i2
-                                dQdr[i, 2, k1, k2, k3] += np.sum(recip_lat[:,2] * v)
+    #                             #dQdr_i0
+    #                             dQdr[i, 0, k1, k2, k3] += np.sum(recip_lat[:,0] * v)
+    #                             #dQdr_i1
+    #                             dQdr[i, 1, k1, k2, k3] += np.sum(recip_lat[:,1] * v)
+    #                             #dQdr_i2
+    #                             dQdr[i, 2, k1, k2, k3] += np.sum(recip_lat[:,2] * v)
 
-                                #Real space charge interpolated onto mesh
-                                Q[k1,k2,k3] += q[i] * M(u0,sio) * M(u1,sio) * M(u2,sio)
+    #                             #Real space charge interpolated onto mesh
+    #                             Q[k1,k2,k3] += q[i] * M(u0,sio) * M(u1,sio) * M(u2,sio)
                                 
 
-    print("\tQ Calculated")
     #Invert Q (do in place on GPU??)
-    Q_recip = np.fft.fftn(Q)
+    Q_recip = np.fft.fftn(np.complex_(Q))
 
-    E_out = np.zeros((K1,K2,K3)) #how to get this per atom??
+    QBC = Q_recip*BC #Shouldnt have to alloc this but math is beyond me rn
 
-    for m1 in range(K1):
-        for m2 in range(K2):
-            for m3 in range(K3):
-                if m1 == 0 and m2 == 0 and m3 == 0:
-                    continue
+    theta_rec_conv_Q = np.fft.ifft(QBC)
 
-                E_out[m1,m2,m3] += Q_recip[m1,m2,m2]*Q_recip[-m1,-m2,-m3]*BC[m1,m2,m3]
+    E_out = 0.5*np.sum(Q * theta_rec_conv_Q)
 
-                #Update values in Q array to make conv (theta_rec, Q) easier
-                Q_recip[m1,m2,m3] *= BC[m1,m2,m3]
-
-
-    E_out /= (2*np.pi*V)
-
-    #Q_recipt has B and C multipled into it now, so IFFT of this is conv(Theta_rec, Q)
-    theta_rec = np.fft.ifft(Q)
-
-    F_out = np.zeros(N_atoms, 3)
+    F_out = np.zeros((N_atoms, 3))
     for i in range(N_atoms):
         for dir in range(3):
-            F_out[i, dir] = -np.sum(dQdr[i,dir,:,:,:] * theta_rec) #do this without allocating
+            F_out[i, dir] = -np.sum(dQdr[i,dir,:,:,:] * theta_rec_conv_Q) #do this without allocating
  
 
     return E_out, F_out
@@ -196,7 +228,6 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
 
 
     L = np.array([np.linalg.norm(real_lat_vec[i,:]) for i in range(real_lat_vec.shape[0])])
-    print(L)
     # OpenMM parameterizes like this:
     # http://docs.openmm.org/latest/userguide/theory/02_standard_forces.html#coulomb-interaction-with-particle-mesh-ewald
     alpha = np.sqrt(-np.log(2*error_tol))/r_cut_real
@@ -219,7 +250,7 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
     # from each atom at each step of the simulation
 
     #TODO
-    avg_net_force = None #tf u take the average of?
+    avg_net_force = 0.0 #tf u take the average of?
 
 
     return U_SPME, F_SPME - avg_net_force
@@ -265,8 +296,7 @@ if __name__ == "__main__":
         U_SPME, F_SPME = PME(positions[:,:,i], charges, real_lat_vecs, error_tol, r_cut_real, spline_interp_order)
         # print(f"\t PME Energy Calculated")
 
-        print(U_SPME)
-        print(np.sum(U_SPME))
+        print(np.sum(np.abs(U_SPME)))
         # rms_eng_error = rms_error(U_SPME + U_LJ, forces_lmp)p
         # rms_force_error = rms_error(F_SPME + F_LJ, eng_lmp) #force format might not work since its Nx3
 
