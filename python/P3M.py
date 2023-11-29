@@ -91,16 +91,18 @@ def calc_C(alpha, V, m1, m2, m3, K1, K2, K3):
         elif m3 <= 0 or m3 <= K3/2:
             m3 -= K3
         m_sq = m1*m1 + m2*m2 + m3*m3 #is this what the paper means?
+        print(m_sq)
+        print(np.exp(-(np.pi**2)*m_sq/(alpha**2)))
         return (1/(np.pi*V))*(np.exp(-(np.pi**2)*m_sq/(alpha**2))/m_sq)
     
 
 def calc_BC(alpha, V, K1, K2, K3, n):
-    BC = np.zeros((K1,K2,K3))
+    BC = np.zeros((K1,K2,K3), dtype = np.complex128)
 
     for m1 in range(K1):
         for m2 in range(K2):
             for m3 in range(K3):
-                BC = calc_B(m1, m2, m3, K1, K2, K3, n) * calc_C(alpha, V, m1, m2, m3, K1, K2, K3)
+                BC[m1,m2,m3] = calc_B(m1, m2, m3, K1, K2, K3, n) * calc_C(alpha, V, m1, m2, m3, K1, K2, K3)
 
     return BC
 
@@ -160,9 +162,6 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
     u = np.array([mesh_dims * np.matmul(recip_lat, r[i,:]) for i in range(r.shape[0])])
 
     #Fill Q array (interpolate charge onto grid)
-    Q = np.zeros((K1, K2, K3))
-    dQdr = np.zeros((N_atoms, 3, K1, K2, K3)) #deriv in real space
-
     spline_vals = calc_bsplines(100000, spline_interp_order)
     Q, dQdr = build_Q(u, spline_interp_order, charges, K1, K2, K3, spline_vals)
     print("\tQ Calculated")
@@ -206,15 +205,22 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
     Q_recip = np.fft.fftn(np.complex_(Q))
 
     QBC = Q_recip*BC #Shouldnt have to alloc this but math is beyond me rn
+    print(BC)
+    print(Q_recip)
+    E_out = 0.5*np.sum(Q_recip * QBC)
+    print(E_out)
 
-    theta_rec_conv_Q = np.fft.ifft(QBC)
+    # theta_rec_conv_Q = np.fft.ifft(QBC)
 
-    E_out = 0.5*np.sum(Q * theta_rec_conv_Q)
+    # theta_conv_q = sig.convolve(BC, Q, mode = 'full')
+    # print(theta_conv_q.shape)
+    # E_out = 0.5*np.sum(Q* theta_conv_q)
+
 
     F_out = np.zeros((N_atoms, 3))
-    for i in range(N_atoms):
-        for dir in range(3):
-            F_out[i, dir] = -np.sum(dQdr[i,dir,:,:,:] * theta_rec_conv_Q) #do this without allocating
+    # for i in range(N_atoms):
+    #     for dir in range(3):
+            # F_out[i, dir] = -np.sum(dQdr[i,dir,:,:,:] * theta_rec_conv_Q) #do this without allocating
  
 
     return E_out, F_out
@@ -275,7 +281,7 @@ if __name__ == "__main__":
     spline_interp_order = 5 #OpenMM uses 5
 
 
-    dump_path = os.path.join(r"C:\Users\ejmei\Repositories\CUDA_P3M\test_data\salt_sim\dump.atom")
+    dump_path = os.path.join(r"../test_data\salt_sim\dump.atom")
 
 
     lattice_param = 5.62 #Angstroms
