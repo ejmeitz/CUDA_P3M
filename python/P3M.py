@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.special as ss
 import scipy.signal as sig
+import scipy
 import os
 import math
 
@@ -15,7 +16,6 @@ def particle_particle(r, q, alpha, r_cut, real_lat):
     N_atoms = len(q)
     U_direct = np.zeros(N_atoms)
     F_direct = np.zeros((N_atoms,3))
-
 
     #Calculate number of cells in each direction that could be reached given r_cut
     #* Can be pre-calculated outside of function
@@ -31,7 +31,7 @@ def particle_particle(r, q, alpha, r_cut, real_lat):
                 
                 #How tf u use neighbor lists here
                 for i in range(N_atoms):
-                    for j in range(i,N_atoms):
+                    for j in range(N_atoms): #think u can only do i < j if n_vec = 0,0,0
                         
                         #Only exclude self interaction in base unit cell
                         if n1 == 0 and n2 == 0 and n3 == 0 and i == j:
@@ -43,6 +43,7 @@ def particle_particle(r, q, alpha, r_cut, real_lat):
 
                         if dist_ijn < r_cut:
                             U_direct[i] += q[i] * q[j] * ss.erfc(alpha*dist_ijn) / dist_ijn
+
                             F_ij = q[i] * q[j] #TODO  #TODO
 
                             r_hat = r_ijn / dist_ijn 
@@ -51,7 +52,6 @@ def particle_particle(r, q, alpha, r_cut, real_lat):
                             F_direct[i,:] += F_ij
                             F_direct[j,:] -= F_ij #on GPU this is not worth doing
 
-    
     return U_direct, F_direct
 
 #From appendix B
@@ -305,7 +305,7 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
 
 
 def self_energy(q, alpha):
-   return -(alpha/np.sqrt(np.pi)) * np.sum(np.square(q))
+    return -(alpha/np.sqrt(np.pi)) * np.sum(np.square(q))
 
 
 def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
@@ -323,14 +323,24 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
     pp_energy, pp_force = particle_particle(r, q, alpha, r_cut_real, real_lat_vec)
     print(f"\tP-P Energy Calculated")
     print(f"\tN-Mesh {n_mesh}")
-    pm_energy, pm_force = particle_mesh(r, q, real_lat_vec, alpha, spline_interp_order, n_mesh)
+    # pm_energy, pm_force = particle_mesh(r, q, real_lat_vec, alpha, spline_interp_order, n_mesh)
     print(f"\tP-M Energy Calculated")
     self_eng = self_energy(q, alpha)
 
-    print(f"PP Energy: {np.sum(pp_energy)}")
-    print(f"PM Energy {np.sum(pm_energy)}")
-    print(f"Self Energy {np.sum(self_eng)}")
-    print(f"Total Ewald Eng {np.sum(pp_energy) + np.sum(pm_energy) + np.sum(self_eng)}")
+    pm_energy = 0.0
+    pm_force = 0.0
+
+    # e_charge = 1.60217663e-19 #C
+    # k = (1/(4*np.pi*scipy.constants.epsilon_0)) # N-m^2 * C^2
+    # A = e_charge*e_charge*k*1e7 # kJ*Ang
+    # A *= (23.06/(1.60818e-22)) # kcal/mol/Ang #fuck this unit system
+
+    A = 332.218 #from file:///C:/Users/ejmei/Downloads/Lecture%2012%20-%20MD-1.pdf same as ^
+
+    print(f"PP Energy: {np.sum(pp_energy*A)}")
+    print(f"PM Energy {np.sum(pm_energy)*A}")
+    print(f"Self Energy {np.sum(self_eng)*A}")
+    print(f"Total Ewald Eng {(np.sum(pp_energy) + np.sum(pm_energy) + np.sum(self_eng))*A}")
 
     U_SPME = pp_energy + pm_energy + self_eng
     F_SPME = pp_force + pm_force
@@ -344,10 +354,48 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
 
     return U_SPME, F_SPME - avg_net_force
 
+#Coul with big ass cutoff
+def brute_force_energy(r, q, real_lat, r_cut):
+    N_atoms = len(q)
+    U_direct = np.zeros(N_atoms)
+    F_direct = np.zeros((N_atoms,3))
 
-def brute_force_energy(r, charges):
-    #They do the same sums as before but keep calcluating until change is less than machine eps
-    pass
+    #Calculate number of cells in each direction that could be reached given r_cut
+    #* Can be pre-calculated outside of function
+    N1, N2, N3 = get_N_cells(real_lat, r_cut)
+    print(f"N-Real [{N1} {N2} {N3}]")
+
+    #* Fix this so it interacts with its own mirror particles (just not itself)
+    for n1 in range(-N1,N1+1):
+        for n2 in range(-N2,N2+1):
+            for n3 in range(-N3,N3+1):
+
+                n_vec = n1*real_lat[0,:] + n2*real_lat[1,:] + n3*real_lat[2,:]
+                
+                #How tf u use neighbor lists here
+                for i in range(N_atoms):
+                    for j in range(N_atoms):
+                        
+                        #Only exclude self interaction in base unit cell
+                        if n1 == 0 and n2 == 0 and n3 == 0 and i == j:
+                            continue
+
+
+                        r_ijn = r[i] - r[j] + n_vec
+                        dist_ijn = np.linalg.norm(r_ijn)
+
+                        if dist_ijn < r_cut:
+                            U_direct[i] += ((q[i] * q[j]) / dist_ijn)
+
+                            # F_ij = q[i] * q[j] #TODO  #TODO
+
+                            # r_hat = r_ijn / dist_ijn 
+                            # F_ij = F_ij*r_hat
+
+                            # F_direct[i,:] += F_ij
+                            # F_direct[j,:] -= F_ij #on GPU this is not worth doing
+
+    return U_direct, F_direct
 
 def rms_error(a, b):
     return np.sqrt(np.sum(np.square(a-b)))/len(a)
@@ -384,6 +432,11 @@ if __name__ == "__main__":
         # i_inds, j_inds, _ = cl.neighborlist(positions[:,:,i], r_cut_neighbor, unitcell=np.array([1, 1, 1]))
         U_SPME, F_SPME = PME(positions[:,:,i], charges, real_lat_vecs, error_tol, r_cut_real, spline_interp_order)
         # print(f"\t PME Energy Calculated")
+
+
+        A = 332.218
+        U_bf, F_bf = brute_force_energy(positions[:,:,i], charges, real_lat_vecs, 50)
+        print(f"Brute Force Coulombic Energy: {np.sum(U_bf)*A}")
 
         # print(U_SPME)
         # rms_eng_error = rms_error(U_SPME + U_LJ, forces_lmp)p
