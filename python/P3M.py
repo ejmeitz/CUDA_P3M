@@ -73,36 +73,29 @@ def dMdu(u,n):
 def b(m, K, n): #n is spline order
     return np.exp(2*np.pi*1.0j*(n-1)*m/K) / sum([M(k+1, n)*np.exp(2*np.pi*1.0j*m*k/K) for k in range(n-1)])
 
-def calc_B(m1,m2,m3,K1,K2,K3,n):
-    b1 = b(m1,K1,n)
-    b2 = b(m2,K2,n)
-    b3 = b(m3,K3,n)
-    return (b1.real**2 + b1.imag**2)*(b2.real**2 + b2.imag**2)*(b3.real**2 + b3.imag**2)
 
-
-def calc_C(alpha, V, m1, m2, m3, K1, K2, K3):
-    if (m1 == 0 and m2 == 0 and m3 == 0):
-        return 0
-    else:
-        if m1 <= 0 or m1 <= K1/2:
-            m1 -= K1
-        elif m2 <= 0 or m2 <= K2/2:
-            m2 -= K2
-        elif m3 <= 0 or m3 <= K3/2:
-            m3 -= K3
-        m_sq = m1*m1 + m2*m2 + m3*m3 #is this what the paper means?
-        print(m_sq)
-        print(np.exp(-(np.pi**2)*m_sq/(alpha**2)))
-        return (1/(np.pi*V))*(np.exp(-(np.pi**2)*m_sq/(alpha**2))/m_sq)
+def calc_C(alpha, V, ms):
+    m_sq = np.dot(ms,ms)
+    print(m_sq)
+    print(np.exp(-(np.pi**2)*m_sq/(alpha**2)))
+    return (1/(np.pi*V))*(np.exp(-(np.pi**2)*m_sq/(alpha**2))/m_sq)
     
 
 def calc_BC(alpha, V, K1, K2, K3, n):
     BC = np.zeros((K1,K2,K3), dtype = np.complex128)
-
+    hs = [0.0, 0.0, 0.0]
     for m1 in range(K1):
+        hs[0] = m1 if (m1 < (K1/2)) else m1 - K1
         for m2 in range(K2):
+            hs[1] = m2 if (m2 < (K2/2)) else m2 - K2
             for m3 in range(K3):
-                BC[m1,m2,m3] = calc_B(m1, m2, m3, K1, K2, K3, n) * calc_C(alpha, V, m1, m2, m3, K1, K2, K3)
+                hs[2] = m3 if (m3 < (K3/2)) else m3 - K3
+                if m1 == 0 and m2 == 0 and m3 == 0:
+                    continue
+                
+                B = np.abs(b(m1,K1,n) * b(m2,K2,n) * b(m3,K3,n)) #& norm == abs here?
+
+                BC[m1,m2,m3] = B * calc_C(alpha, V, hs)
 
     return BC
 
@@ -164,6 +157,8 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
     #Fill Q array (interpolate charge onto grid)
     spline_vals = calc_bsplines(100000, spline_interp_order)
     Q, dQdr = build_Q(u, spline_interp_order, charges, K1, K2, K3, spline_vals)
+    # plt.imshow(Q[:,:,2])
+
     print("\tQ Calculated")
 
     BC = calc_BC(alpha, V, K1, K2, K3, spline_interp_order)
@@ -204,17 +199,17 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
     #Invert Q (do in place on GPU??)
     Q_recip = np.fft.fftn(np.complex_(Q))
 
-    QBC = Q_recip*BC #Shouldnt have to alloc this but math is beyond me rn
-    print(BC)
-    print(Q_recip)
-    E_out = 0.5*np.sum(Q_recip * QBC)
+    Q_recip *= BC #Shouldnt have to alloc this but math is beyond me rn
+
+    QBC_real_space = np.fft.ifftn(Q_recip)
+    E_out = 0.0
+    for k1 in range(K1):
+        for k2 in range(K2):
+            for k3 in range(K3):
+                E_out += np.real(QBC_real_space[k1,k2,k3]) * np.real(Q_recip[k1,k2,k3])
+
+    
     print(E_out)
-
-    # theta_rec_conv_Q = np.fft.ifft(QBC)
-
-    # theta_conv_q = sig.convolve(BC, Q, mode = 'full')
-    # print(theta_conv_q.shape)
-    # E_out = 0.5*np.sum(Q* theta_conv_q)
 
 
     F_out = np.zeros((N_atoms, 3))
@@ -240,7 +235,7 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
     #Look at FFT implementation it can be better if this is a factor of some prime number
     n_mesh = np.ceil(2*alpha*L/(3*np.power(error_tol, 0.2))).astype(np.int64)
 
-    n_mesh = [6,6,6] #idk its slow as shit with that eqn ^
+    # n_mesh = [6,6,6] #idk its slow as shit with that eqn ^
 
     pp_energy, pp_force = particle_particle(r, q, alpha, r_cut_real, real_lat_vec)
     print(f"\tP-P Energy Calculated")
