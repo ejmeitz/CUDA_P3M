@@ -74,14 +74,13 @@ def b(m, K, n): #n is spline order
     return np.exp(2*np.pi*1.0j*(n-1)*m/K) / sum([M(k+1, n)*np.exp(2*np.pi*1.0j*m*k/K) for k in range(n-1)])
 
 
-def calc_C(alpha, V, ms):
-    m_sq = np.dot(ms,ms)
-    print(m_sq)
-    print(np.exp(-(np.pi**2)*m_sq/(alpha**2)))
+def calc_C(alpha, V, ms, recip_lat):
+    m_star = ms[0]*recip_lat[0,:] + ms[1]*recip_lat[1,:] + ms[2]*recip_lat[2,:]
+    m_sq = np.dot(m_star,m_star)
     return (1/(np.pi*V))*(np.exp(-(np.pi**2)*m_sq/(alpha**2))/m_sq)
     
 
-def calc_BC(alpha, V, K1, K2, K3, n):
+def calc_BC(alpha, V, K1, K2, K3, n, recip_lat):
     BC = np.zeros((K1,K2,K3), dtype = np.complex128)
     hs = [0.0, 0.0, 0.0]
     for m1 in range(K1):
@@ -95,7 +94,7 @@ def calc_BC(alpha, V, K1, K2, K3, n):
                 
                 B = np.abs(b(m1,K1,n) * b(m2,K2,n) * b(m3,K3,n)) #& norm == abs here?
 
-                BC[m1,m2,m3] = B * calc_C(alpha, V, hs)
+                BC[m1,m2,m3] = B * calc_C(alpha, V, hs, recip_lat)
 
     return BC
 
@@ -161,7 +160,7 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
 
     print("\tQ Calculated")
 
-    BC = calc_BC(alpha, V, K1, K2, K3, spline_interp_order)
+    BC = calc_BC(alpha, V, K1, K2, K3, spline_interp_order, recip_lat)
     # sio = spline_interp_order #just alias
 
     # v = [0.0,0.0,0.0] #pre-alloc
@@ -199,7 +198,7 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
     #Invert Q (do in place on GPU??)
     Q_recip = np.fft.fftn(np.complex_(Q))
 
-    Q_recip *= BC #Shouldnt have to alloc this but math is beyond me rn
+    Q_recip *= BC
 
     QBC_real_space = np.fft.ifftn(Q_recip)
     E_out = 0.0
