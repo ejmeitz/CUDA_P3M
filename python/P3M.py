@@ -27,13 +27,18 @@ def particle_particle(r, q, alpha, r_cut, real_lat):
         for n2 in range(-N2,N2+1):
             for n3 in range(-N3,N3+1):
 
-                n_vec = np.array([n1,n2,n3]) #remove allocation
+                n_vec = n1*real_lat[0,:] + n2*real_lat[1,:] + n3*real_lat[2,:]
                 
                 #How tf u use neighbor lists here
                 for i in range(N_atoms):
-                    for j in range(i+1, N_atoms):
+                    for j in range(i,N_atoms):
+                        
+                        #Only exclude self interaction in base unit cell
+                        if n1 == 0 and n2 == 0 and n3 == 0 and i == j:
+                            continue
 
-                        r_ijn = r[j] - r[i] + n_vec
+
+                        r_ijn = r[i] - r[j] + n_vec
                         dist_ijn = np.linalg.norm(r_ijn)
 
                         if dist_ijn < r_cut:
