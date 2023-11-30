@@ -20,18 +20,18 @@ def particle_particle(r, q, alpha, r_cut, real_lat):
     #Calculate number of cells in each direction that could be reached given r_cut
     #* Can be pre-calculated outside of function
     N1, N2, N3 = get_N_cells(real_lat, r_cut)
-
+    print(f"N-Real [{N1} {N2} {N3}]")
 
     #* Fix this so it interacts with its own mirror particles (just not itself)
     for n1 in range(-N1,N1+1):
         for n2 in range(-N2,N2+1):
             for n3 in range(-N3,N3+1):
 
-                n_vec = np.array([n1,n2,n3])
+                n_vec = np.array([n1,n2,n3]) #remove allocation
                 
                 #How tf u use neighbor lists here
                 for i in range(N_atoms):
-                    for j in range(i+1, N_atoms): #they had from 1-N and divide by 2 at end, check that its the same
+                    for j in range(i+1, N_atoms):
 
                         r_ijn = r[j] - r[i] + n_vec
                         dist_ijn = np.linalg.norm(r_ijn)
@@ -80,7 +80,7 @@ def calc_C(alpha, V, ms, recip_lat):
     return (1/(np.pi*V))*(np.exp(-(np.pi**2)*m_sq/(alpha**2))/m_sq)
     
 
-def calc_BC(alpha, V, K1, K2, K3, n, recip_lat):
+def calc_BC(alpha, V, K1, K2, K3, n, recip_lat, real_lat):
     BC = np.zeros((K1,K2,K3), dtype = np.complex128)
     hs = [0.0, 0.0, 0.0]
     for m1 in range(K1):
@@ -93,8 +93,12 @@ def calc_BC(alpha, V, K1, K2, K3, n, recip_lat):
                     continue
                 
                 B = np.abs(b(m1,K1,n) * b(m2,K2,n) * b(m3,K3,n)) #& norm == abs here?
+                C = calc_C(alpha, V, hs, recip_lat)
 
-                BC[m1,m2,m3] = B * calc_C(alpha, V, hs, recip_lat)
+                m_star = hs[0]*recip_lat[0,:] + hs[1]*recip_lat[1,:] + hs[2]*recip_lat[2,:]
+                m_sq = np.dot(m_star,m_star)
+
+                BC[m1,m2,m3] = B * psi(m_sq, V, alpha)
 
     return BC
 
@@ -137,6 +141,82 @@ def build_Q(u, n, charges, K1, K2, K3, spline_vals):
     return Q, dQdr
 
 
+############## TEST
+
+#From PME implementation in C++, gotta figure out horner method for other orders
+def compute_spline(u): #ONLY WORKS FOR ORDER 4
+    floor_u = np.floor(u);
+    x = u - floor_u + np.float_(4) - 1.0;
+
+    #Compute splines and their derivatives using Horner's method.
+    a = np.array([
+        32.0 / 3.0, -8.0, 2.0, -1.0 / 6.0,
+        -22.0 / 3.0, 10.0, -4.0, 1.0 / 2.0,
+        2.0 / 3.0, -2.0, 2.0, -1.0 / 2.0,
+        0.0, 0.0, 0.0, 1.0 / 6.0])
+    
+    s = np.zeros(4)
+    ds = np.zeros(4)
+    for k in range(4):
+        s[k] = a[4*k] + (a[4*k+1] + (a[4*k+2] + a[4*k+3] * x) * x) * x;
+        ds[k] = a[4*k+1] + (2.0 * a[4*k+2] + 3.0 * a[4*k+3] * x) * x;
+        x = x - 1
+
+    return s, ds, floor_u
+
+#REQUIRES ORDER = 4
+def build_Q2(u, q, order, K1, K2, K3):
+    assert order == 4
+    M_vals = np.zeros((3, len(q), order))
+    dM_vals = np.zeros((3, len(q), order))
+    Q = np.zeros((K1, K2, K3))
+    dQdr = 0.0
+
+    for i in range(len(q)):
+        q_n = q[i]
+        u_i = u[i]
+
+        floor_u = np.zeros(3)
+        for d in range(3): #2 is dimensions
+            M_vals[d,i,:], dM_vals[d,i,:], floor_u[d] = compute_spline(u_i[d])
+
+        for c0 in range(order):
+            l0 = floor_u[0] + c0 - order + 1
+            #           k0 = l0 < 0 ? l0 + K1 : l0
+            k0 = l0 + K1 if l0 < 0 else l0
+
+            q_n_s0 = q_n * M_vals[0,i,c0]
+
+            for c1 in range(order):
+                l1 = floor_u[1] + c1 - order + 1
+                #             k1 = l1 < 0 ? l1 + K2 : l1
+                k1 = l1 + K2 if l1 < 0 else l1
+                
+                q_n_s0_s1 = q_n_s0 * M_vals[1,i,c1]
+
+                for c2 in range(order):
+                    l2 = floor_u[2] + c2 - order + 1
+                    k2 = l2 + K3 if l2 < 0 else l2
+
+
+                    Q[int(k0), int(k1), int(k2)] += q_n_s0_s1 * M_vals[2,i,c1]
+
+    return Q, dQdr
+
+#what in the fuck is this??????????
+def psi(h2, V, alpha):
+  b2 = np.pi * h2 / (alpha**2)
+  b = np.sqrt(b2)
+  b3 = b2 * b
+
+  h = np.sqrt(h2)
+  h3 = h2 * h
+
+  return pow(np.pi, 9.0 / 2.0) / (3.0 * V) * h3 \
+      * (np.sqrt(np.pi) * ss.erfc(b) + (1.0 / (2.0 * b3) - 1.0 / b) * np.exp(-b2));
+
+####################
+
 #Calculate E_reciprocal
 def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
 
@@ -156,11 +236,13 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
     #Fill Q array (interpolate charge onto grid)
     spline_vals = calc_bsplines(100000, spline_interp_order)
     Q, dQdr = build_Q(u, spline_interp_order, charges, K1, K2, K3, spline_vals)
+    #should be equiv & faster than mine but only works order 4
+    # Q, dQdr = build_Q2(u, charges, spline_interp_order, K1, K2, K3)
     # plt.imshow(Q[:,:,2])
 
     print("\tQ Calculated")
 
-    BC = calc_BC(alpha, V, K1, K2, K3, spline_interp_order, recip_lat)
+    BC = calc_BC(alpha, V, K1, K2, K3, spline_interp_order, recip_lat, real_lat)
     # sio = spline_interp_order #just alias
 
     # v = [0.0,0.0,0.0] #pre-alloc
@@ -197,7 +279,6 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
 
     #Invert Q (do in place on GPU??)
     Q_recip = np.fft.fftn(np.complex_(Q))
-
     Q_recip *= BC
 
     QBC_real_space = np.fft.ifftn(Q_recip)
@@ -207,8 +288,6 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
             for k3 in range(K3):
                 E_out += np.real(QBC_real_space[k1,k2,k3]) * np.real(Q_recip[k1,k2,k3])
 
-    
-    print(E_out)
 
 
     F_out = np.zeros((N_atoms, 3))
@@ -241,7 +320,12 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
     print(f"\tN-Mesh {n_mesh}")
     pm_energy, pm_force = particle_mesh(r, q, real_lat_vec, alpha, spline_interp_order, n_mesh)
     print(f"\tP-M Energy Calculated")
-    self_eng = self_energy(r, q)
+    self_eng = self_energy(q, alpha)
+
+    print(f"PP Energy: {np.sum(pp_energy)}")
+    print(f"PM Energy {np.sum(pm_energy)}")
+    print(f"Self Energy {np.sum(self_eng)}")
+    print(f"Total Ewald Eng {np.sum(pp_energy) + np.sum(pm_energy) + np.sum(self_eng)}")
 
     U_SPME = pp_energy + pm_energy + self_eng
     F_SPME = pp_force + pm_force
@@ -296,7 +380,7 @@ if __name__ == "__main__":
         U_SPME, F_SPME = PME(positions[:,:,i], charges, real_lat_vecs, error_tol, r_cut_real, spline_interp_order)
         # print(f"\t PME Energy Calculated")
 
-        print(np.sum(np.abs(U_SPME)))
+        # print(U_SPME)
         # rms_eng_error = rms_error(U_SPME + U_LJ, forces_lmp)p
         # rms_force_error = rms_error(F_SPME + F_LJ, eng_lmp) #force format might not work since its Nx3
 
