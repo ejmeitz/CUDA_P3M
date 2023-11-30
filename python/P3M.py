@@ -31,7 +31,7 @@ def particle_particle(r, q, alpha, r_cut, real_lat):
                 
                 #How tf u use neighbor lists here
                 for i in range(N_atoms):
-                    for j in range(N_atoms): #think u can only do i < j if n_vec = 0,0,0
+                    for j in range(N_atoms): #think u can only do i < j if n_vec = 0,0,0, check once it works
                         
                         #Only exclude self interaction in base unit cell
                         if n1 == 0 and n2 == 0 and n3 == 0 and i == j:
