@@ -392,10 +392,6 @@ if __name__ == "__main__":
         # print(f"\t PME Energy Calculated")
 
 
-        A = 332.218
-        U_bf, F_bf = brute_force_energy(positions[:,:,i], charges, real_lat_vecs, 50)
-        print(f"Brute Force Coulombic Energy: {np.sum(U_bf)*A}")
-
         # print(U_SPME)
         # rms_eng_error = rms_error(U_SPME + U_LJ, forces_lmp)p
         # rms_force_error = rms_error(F_SPME + F_LJ, eng_lmp) #force format might not work since its Nx3
