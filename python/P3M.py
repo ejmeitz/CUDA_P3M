@@ -354,48 +354,6 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
 
     return U_SPME, F_SPME - avg_net_force
 
-#Coul with big ass cutoff
-def brute_force_energy(r, q, real_lat, r_cut):
-    N_atoms = len(q)
-    U_direct = np.zeros(N_atoms)
-    F_direct = np.zeros((N_atoms,3))
-
-    #Calculate number of cells in each direction that could be reached given r_cut
-    #* Can be pre-calculated outside of function
-    N1, N2, N3 = get_N_cells(real_lat, r_cut)
-    print(f"N-Real [{N1} {N2} {N3}]")
-
-    #* Fix this so it interacts with its own mirror particles (just not itself)
-    for n1 in range(-N1,N1+1):
-        for n2 in range(-N2,N2+1):
-            for n3 in range(-N3,N3+1):
-
-                n_vec = n1*real_lat[0,:] + n2*real_lat[1,:] + n3*real_lat[2,:]
-                
-                #How tf u use neighbor lists here
-                for i in range(N_atoms):
-                    for j in range(N_atoms):
-                        
-                        #Only exclude self interaction in base unit cell
-                        if n1 == 0 and n2 == 0 and n3 == 0 and i == j:
-                            continue
-
-
-                        r_ijn = r[i] - r[j] + n_vec
-                        dist_ijn = np.linalg.norm(r_ijn)
-
-                        if dist_ijn < r_cut:
-                            U_direct[i] += ((q[i] * q[j]) / dist_ijn)
-
-                            # F_ij = q[i] * q[j] #TODO  #TODO
-
-                            # r_hat = r_ijn / dist_ijn 
-                            # F_ij = F_ij*r_hat
-
-                            # F_direct[i,:] += F_ij
-                            # F_direct[j,:] -= F_ij #on GPU this is not worth doing
-
-    return U_direct, F_direct
 
 def rms_error(a, b):
     return np.sqrt(np.sum(np.square(a-b)))/len(a)
