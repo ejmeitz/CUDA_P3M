@@ -90,21 +90,22 @@ def calc_BC(alpha, V, K1, K2, K3, n, recip_lat, real_lat):
     hs = [0.0, 0.0, 0.0]
 
     for m1 in range(K1):
-        hs[0] = m1 if (m1 < (K1/2)) else m1 - K1
+        hs[0] = m1 if (m1 <= (K1/2)) else m1 - K1
         for m2 in range(K2):
-            hs[1] = m2 if (m2 < (K2/2)) else m2 - K2
+            hs[1] = m2 if (m2 <= (K2/2)) else m2 - K2
             for m3 in range(K3):
-                hs[2] = m3 if (m3 < (K3/2)) else m3 - K3
+                hs[2] = m3 if (m3 <= (K3/2)) else m3 - K3
                 if m1 == 0 and m2 == 0 and m3 == 0:
                     continue
                 
                 B = (np.abs(b(m1,K1,n))**2 )* (np.abs(b(m2,K2,n))**2) * (np.abs(b(m3,K3,n)**2))
+                # B = np.linalg.norm(b(m1,K1,n)*b(m2,K2,n)*b(m3,K3,n))
                 C = calc_C(alpha, V, hs, recip_lat)
 
                 m_star = hs[0]*recip_lat[0,:] + hs[1]*recip_lat[1,:] + hs[2]*recip_lat[2,:]
                 m_sq = np.dot(m_star,m_star)
 
-                BC[m1,m2,m3] = B * C #psi(m_sq, V, alpha)
+                BC[m1,m2,m3] = B * C#psi(m_sq, V, alpha)
 
     return BC
 
@@ -250,56 +251,15 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
     print("\tQ Calculated")
 
     BC = calc_BC(alpha, V, K1, K2, K3, spline_interp_order, recip_lat, real_lat)
-    # sio = spline_interp_order #just alias
-    
-    # v = [0.0,0.0,0.0] #pre-alloc
-    
-    # for k1 in range(K1):
-    #     for k2 in range(K2):
-    #         for k3 in range(K3):
 
-                 
-    #             #* not sure this loop is right
-    #             #& my current interpretation is that for a given grid point (k1,k2,k3) get contribution from all other grid pts
-    #             for i in range(N_atoms):
-    #                 for p1 in range(K1):
-    #                     for p2 in range(K2):
-    #                         for p3 in range(K3):                            
-    #                             u0 = u[i,0] - k1 - p1*K1; u1 = u[i,1]- k2 - p2*K2; u2 = u[i,2] - k3 - p3*K3
-
-    #                             I = dMdu(u0,sio) * M(u1,sio) * M(u2,sio)
-    #                             II = M(u0,sio) * dMdu(u1,sio) * M(u2,sio)
-    #                             III = M(u0,sio) * M(u1,sio) * dMdu(u2,sio)
-
-    #                             v[0] = K1*I; v[1] = K2*II; v[2] = K3*III
-
-    #                             #dQdr_i0
-    #                             dQdr[i, 0, k1, k2, k3] += np.sum(recip_lat[:,0] * v)
-    #                             #dQdr_i1
-    #                             dQdr[i, 1, k1, k2, k3] += np.sum(recip_lat[:,1] * v)
-    #                             #dQdr_i2
-    #                             dQdr[i, 2, k1, k2, k3] += np.sum(recip_lat[:,2] * v)
-
-    #                             #Real space charge interpolated onto mesh
-    #                             Q[k1,k2,k3] += q[i] * M(u0,sio) * M(u1,sio) * M(u2,sio)
-                                
-
-    #Invert Q (do in place on GPU??)
+    #Invert Q 
     Q_recip = np.fft.fftn(np.complex_(Q))
-
     Q_recip *= BC
-    
-    
     QBC_real_space = np.fft.ifftn(Q_recip) #can do in place?
 
     print(np.amax(np.abs(QBC_real_space)))
-    print(np.amax(Q))
-    E_out = 0.0
-    for k1 in range(K1):
-        for k2 in range(K2):
-            for k3 in range(K3):
-                E_out += np.real(QBC_real_space[k1,k2,k3]) * np.real(Q[k1,k2,k3])
-
+    E_out = np.sum(np.real(QBC_real_space) * np.real(Q))
+  
     # E_out *= 0.5 #necessar?
 
     F_out = np.zeros((N_atoms, 3))
@@ -388,7 +348,7 @@ if __name__ == "__main__":
     #positions are (Nx3) masses, charges (Nx1), boxsize (3x1)
     N_steps = 11
     positions, forces_lmp, eng_lmp, masses, charges, box_sizes = load_system(dump_path, N_steps)
-    for i in range(1):
+    for i in range(3):
         print(f"ON LOOP ITERATION {i}")
         U_LJ, F_LJ = lj_energy_loop(positions[:,:,i], charges, box_sizes, r_cut_lj)
 
