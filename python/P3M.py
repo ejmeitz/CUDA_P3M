@@ -76,7 +76,7 @@ def dMdu(u,n):
 # Make this non-allocating
 # Make this not use np.exp(j) just manage cos() and sin() manually
 def b(m, K, n): #n is spline order
-    return np.exp(2*np.pi*1.0j*(n-1)*m/K) / sum([M(k+1, n)*np.exp(2*np.pi*1.0j*m*k/K) for k in range(n-1)])
+    return np.exp(2*np.pi*1.0j*(n-1)*m/K) / np.sum([M(k+1, n)*np.exp(2*np.pi*1.0j*m*k/K) for k in range(n-1)])
 
 
 def calc_C(alpha, V, ms, recip_lat):
@@ -88,6 +88,7 @@ def calc_C(alpha, V, ms, recip_lat):
 def calc_BC(alpha, V, K1, K2, K3, n, recip_lat, real_lat):
     BC = np.zeros((K1,K2,K3), dtype = np.complex128)
     hs = [0.0, 0.0, 0.0]
+
     for m1 in range(K1):
         hs[0] = m1 if (m1 < (K1/2)) else m1 - K1
         for m2 in range(K2):
@@ -97,13 +98,13 @@ def calc_BC(alpha, V, K1, K2, K3, n, recip_lat, real_lat):
                 if m1 == 0 and m2 == 0 and m3 == 0:
                     continue
                 
-                B = np.abs(b(m1,K1,n) * b(m2,K2,n) * b(m3,K3,n)) #& norm == abs here?
+                B = (np.abs(b(m1,K1,n))**2 )* (np.abs(b(m2,K2,n))**2) * (np.abs(b(m3,K3,n)**2))
                 C = calc_C(alpha, V, hs, recip_lat)
 
                 m_star = hs[0]*recip_lat[0,:] + hs[1]*recip_lat[1,:] + hs[2]*recip_lat[2,:]
                 m_sq = np.dot(m_star,m_star)
 
-                BC[m1,m2,m3] = B * psi(m_sq, V, alpha)
+                BC[m1,m2,m3] = B * C #psi(m_sq, V, alpha)
 
     return BC
 
@@ -240,16 +241,17 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
 
     #Fill Q array (interpolate charge onto grid)
     spline_vals = calc_bsplines(100000, spline_interp_order)
-    Q, dQdr = build_Q(u, spline_interp_order, charges, K1, K2, K3, spline_vals)
+    
+    # Q, dQdr = build_Q(u, spline_interp_order, charges, K1, K2, K3, spline_vals)
     #should be equiv & faster than mine but only works order 4
-    # Q, dQdr = build_Q2(u, charges, spline_interp_order, K1, K2, K3)
+    Q, dQdr = build_Q2(u, charges, spline_interp_order, K1, K2, K3)
     # plt.imshow(Q[:,:,2])
-
+    # print(np.amax(Q - Q2))
     print("\tQ Calculated")
 
     BC = calc_BC(alpha, V, K1, K2, K3, spline_interp_order, recip_lat, real_lat)
     # sio = spline_interp_order #just alias
-
+    
     # v = [0.0,0.0,0.0] #pre-alloc
     
     # for k1 in range(K1):
@@ -284,16 +286,21 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
 
     #Invert Q (do in place on GPU??)
     Q_recip = np.fft.fftn(np.complex_(Q))
-    Q_recip *= BC
 
-    QBC_real_space = np.fft.ifftn(Q_recip)
+    Q_recip *= BC
+    
+    
+    QBC_real_space = np.fft.ifftn(Q_recip) #can do in place?
+
+    print(np.amax(np.abs(QBC_real_space)))
+    print(np.amax(Q))
     E_out = 0.0
     for k1 in range(K1):
         for k2 in range(K2):
             for k3 in range(K3):
-                E_out += np.real(QBC_real_space[k1,k2,k3]) * np.real(Q_recip[k1,k2,k3])
+                E_out += np.real(QBC_real_space[k1,k2,k3]) * np.real(Q[k1,k2,k3])
 
-
+    # E_out *= 0.5 #necessar?
 
     F_out = np.zeros((N_atoms, 3))
     # for i in range(N_atoms):
@@ -323,7 +330,7 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
     pp_energy, pp_force = particle_particle(r, q, alpha, r_cut_real, real_lat_vec)
     print(f"\tP-P Energy Calculated")
     print(f"\tN-Mesh {n_mesh}")
-    # pm_energy, pm_force = particle_mesh(r, q, real_lat_vec, alpha, spline_interp_order, n_mesh)
+    pm_energy, pm_force = particle_mesh(r, q, real_lat_vec, alpha, spline_interp_order, n_mesh)
     print(f"\tP-M Energy Calculated")
     self_eng = self_energy(q, alpha)
 
@@ -335,7 +342,7 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
     # A = e_charge*e_charge*k*1e7 # kJ*Ang
     # A *= (23.06/(1.60818e-22)) # kcal/mol/Ang #fuck this unit system
 
-    A = 332.218 #from file:///C:/Users/ejmei/Downloads/Lecture%2012%20-%20MD-1.pdf same as ^
+    A = 332.218
 
     print(f"PP Energy: {np.sum(pp_energy*A)}")
     print(f"PM Energy {np.sum(pm_energy)*A}")
@@ -367,7 +374,7 @@ if __name__ == "__main__":
     r_cut_real = 10.0 #kinda picked randomly
     r_cut_neighbor = r_cut_real + 1.0 #not sure what this should be
     error_tol = 1e-4 #GPU OpenMM warns 5e-5 is lower limit and error can start going up (should check when we do GPU)
-    spline_interp_order = 5 #OpenMM uses 5
+    spline_interp_order = 4 #OpenMM uses 5
 
 
     dump_path = os.path.join(r"../test_data\salt_sim\dump.atom")
