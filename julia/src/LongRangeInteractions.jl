@@ -1,6 +1,5 @@
-#Probably shoudl make a package but this is easier to develop with for now
+module LongRangeInteractions
 
-#load packages
 using LinearAlgebra
 using StructArrays
 using TimerOutputs
@@ -9,5 +8,8 @@ using TimerOutputs
 include("types.jl")
 include("dump_parser.jl")
 include("test.jl")
-include("P3M.jl")
 
+include("particle_particle.jl")
+include("particle_mesh.jl")
+
+end

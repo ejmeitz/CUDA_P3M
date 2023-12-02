@@ -76,7 +76,9 @@ def dMdu(u,n):
 # Make this non-allocating
 # Make this not use np.exp(j) just manage cos() and sin() manually
 def b(m, K, n): #n is spline order
-    return np.exp(2*np.pi*1.0j*(n-1)*m/K) / np.sum([M(k+1, n)*np.exp(2*np.pi*1.0j*m*k/K) for k in range(n-1)])
+    num = np.exp(2*np.pi*1.0j*(n-1)*m/K)
+    denom = np.sum([M(k+1, n)*np.exp(2*np.pi*1.0j*m*k/K) for k in range(n-1)])
+    return  num/denom 
 
 
 def calc_C(alpha, V, ms, recip_lat):
@@ -85,7 +87,7 @@ def calc_C(alpha, V, ms, recip_lat):
     return (1/(np.pi*V))*(np.exp(-(np.pi**2)*m_sq/(alpha**2))/m_sq)
     
 
-def calc_BC(alpha, V, K1, K2, K3, n, recip_lat, real_lat):
+def calc_BC(alpha, V, K1, K2, K3, n, recip_lat):
     BC = np.zeros((K1,K2,K3), dtype = np.complex128)
     hs = [0.0, 0.0, 0.0]
 
@@ -99,130 +101,67 @@ def calc_BC(alpha, V, K1, K2, K3, n, recip_lat, real_lat):
                     continue
                 
                 B = (np.abs(b(m1,K1,n))**2 )* (np.abs(b(m2,K2,n))**2) * (np.abs(b(m3,K3,n)**2))
+                # B = (np.abs(b(m1,K1,n)) )* (np.abs(b(m2,K2,n))) * (np.abs(b(m3,K3,n)))
                 # B = np.linalg.norm(b(m1,K1,n)*b(m2,K2,n)*b(m3,K3,n))
                 C = calc_C(alpha, V, hs, recip_lat)
 
-                m_star = hs[0]*recip_lat[0,:] + hs[1]*recip_lat[1,:] + hs[2]*recip_lat[2,:]
-                m_sq = np.dot(m_star,m_star)
+                # m_star = hs[0]*recip_lat[0,:] + hs[1]*recip_lat[1,:] + hs[2]*recip_lat[2,:]
+                # m_sq = np.dot(m_star,m_star)
 
                 BC[m1,m2,m3] = B * C#psi(m_sq, V, alpha)
 
     return BC
 
-#& prob adds error, but saves having to eval this func a fuck ton 
-def calc_bsplines(n_spline_vals, n):
-    b_spline_arr = np.empty(n_spline_vals)
-    for i in range(n_spline_vals):
-        b_spline_arr[i] = M(n/np.float_(n_spline_vals)*np.float_(i+1), n)
-    return b_spline_arr
 
-def build_Q(u, n, charges, K1, K2, K3, spline_vals):
+def build_Q(u, n, charges, K1, K2, K3):
     N_atoms = len(charges)
     Q = np.zeros((K1, K2, K3))
     dQdr = np.zeros((N_atoms, 3, K1, K2, K3)) #deriv in real space
 
-    arg = np.empty(3) # distance between (original pt - nearpt), adding one element from range(spline_order)
-    for j in range(N_atoms):
-        nearpt=np.int_(np.floor(u[j,:]))
-        # only need to go to k=0,n-1, for k=n, arg > n, so don't consider this
-        for k1 in range(n):
-            n1 = nearpt[0]-k1
-            arg[0] = u[j,0]-np.float_(n1)
-            n1 = np.mod(n1,K1)
-            for k2 in range(n):
-                n2 = nearpt[1]-k2
-                arg[1] = u[j,1]-np.float_(n2)
-                n2 = np.mod(n2,K2)
-                for k3 in range(n):
-                    n3 = nearpt[2]-k3
-                    arg[2] = u[j,2]-np.float_(n3)
-                    n3 = np.mod(n3,K3)
-                    #orig didnt have the -1 but I needed that to avoid edge case
-                    splindex = np.ceil((arg/n)*np.float_(len(spline_vals))) - 1
-                    splindex = np.int_(splindex) 
-                    Q[n1,n2,n3] += charges[j]*spline_vals[splindex[0]]*spline_vals[splindex[1]]*spline_vals[splindex[2]]
-                    
-                    dQdr[i, 0, k1, k2, k3] += 0.0 #TODO
-                    dQdr[i, 1, k1, k2, k3] += 0.0
-                    dQdr[i, 2, k1, k2, k3] += 0.0
-    return Q, dQdr
+    for i in range(N_atoms):
+        for c0 in range(n+1):
+            l0 = np.round(u[i,0]) - c0 # Grid point to interpolate onto
+
+            q_n_0 = charges[i]*M(u[i,0] - l0, n) #if 0 <= u_i0 - l0 <= n will be non-zero
+
+            l0 += n//2 # Shift
+            if l0 < 0: # Apply PBC
+                l0 += K1
+            elif l0 >= K1:
+                l0 -= K1
+
+            for c1 in range(n+1):
+                l1 = np.round(u[i,1]) - c1 # Grid point to interpolate onto
+
+                q_n_1 = q_n_0*M(u[i,1] - l1, n) #if 0 <= u_i1 - l1 <= n will be non-zero
 
 
-############## TEST
-
-#From PME implementation in C++, gotta figure out horner method for other orders
-def compute_spline(u): #ONLY WORKS FOR ORDER 4
-    floor_u = np.floor(u);
-    x = u - floor_u + np.float_(4) - 1.0;
-
-    #Compute splines and their derivatives using Horner's method.
-    a = np.array([
-        32.0 / 3.0, -8.0, 2.0, -1.0 / 6.0,
-        -22.0 / 3.0, 10.0, -4.0, 1.0 / 2.0,
-        2.0 / 3.0, -2.0, 2.0, -1.0 / 2.0,
-        0.0, 0.0, 0.0, 1.0 / 6.0])
-    
-    s = np.zeros(4)
-    ds = np.zeros(4)
-    for k in range(4):
-        s[k] = a[4*k] + (a[4*k+1] + (a[4*k+2] + a[4*k+3] * x) * x) * x;
-        ds[k] = a[4*k+1] + (2.0 * a[4*k+2] + 3.0 * a[4*k+3] * x) * x;
-        x = x - 1
-
-    return s, ds, floor_u
-
-#REQUIRES ORDER = 4
-def build_Q2(u, q, order, K1, K2, K3):
-    assert order == 4
-    M_vals = np.zeros((3, len(q), order))
-    dM_vals = np.zeros((3, len(q), order))
-    Q = np.zeros((K1, K2, K3))
-    dQdr = 0.0
-
-    for i in range(len(q)):
-        q_n = q[i]
-        u_i = u[i]
-
-        floor_u = np.zeros(3)
-        for d in range(3): #2 is dimensions
-            M_vals[d,i,:], dM_vals[d,i,:], floor_u[d] = compute_spline(u_i[d])
-
-        for c0 in range(order):
-            l0 = floor_u[0] + c0 - order + 1
-            #           k0 = l0 < 0 ? l0 + K1 : l0
-            k0 = l0 + K1 if l0 < 0 else l0
-
-            q_n_s0 = q_n * M_vals[0,i,c0]
-
-            for c1 in range(order):
-                l1 = floor_u[1] + c1 - order + 1
-                #             k1 = l1 < 0 ? l1 + K2 : l1
-                k1 = l1 + K2 if l1 < 0 else l1
+                l1 += n//2 # Shift
+                if l1 < 0: # Apply PBC
+                    l1 += K2
+                elif l1 >= K2:
+                    l1 -= K2
                 
-                q_n_s0_s1 = q_n_s0 * M_vals[1,i,c1]
+                for c2 in range(n+1):
+                    l2 = np.round(u[i,2]) - c2 # Grid point to interpolate onto
 
-                for c2 in range(order):
-                    l2 = floor_u[2] + c2 - order + 1
-                    k2 = l2 + K3 if l2 < 0 else l2
+                    q_n_2 = q_n_1*M(u[i,2] - l2, n) #if 0 <= u_i1 - l1 <= n will be non-zero
 
 
-                    Q[int(k0), int(k1), int(k2)] += q_n_s0_s1 * M_vals[2,i,c1]
+                    l2 += n//2 # Shift
+                    if l2 < 0: # Apply PBC
+                        l2 += K2
+                    elif l2 >= K2:
+                        l2 -= K2
 
+                    Q[int(l0) ,int(l1), int(l2)] += q_n_2
+                    
+                    # dQdr[i, 0, int(l0), int(l1), int(l2)] += 0.0 #TODO
+                    # dQdr[i, 1, int(l0), int(l1), int(l2)] += 0.0
+                    # dQdr[i, 2, int(l0), int(l1), int(l2)] += 0.0
     return Q, dQdr
 
-#what in the fuck is this??????????
-def psi(h2, V, alpha):
-  b2 = np.pi * h2 / (alpha**2)
-  b = np.sqrt(b2)
-  b3 = b2 * b
 
-  h = np.sqrt(h2)
-  h3 = h2 * h
-
-  return pow(np.pi, 9.0 / 2.0) / (3.0 * V) * h3 \
-      * (np.sqrt(np.pi) * ss.erfc(b) + (1.0 / (2.0 * b3) - 1.0 / b) * np.exp(-b2));
-
-####################
 
 #Calculate E_reciprocal
 def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
@@ -230,6 +169,8 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
     N_atoms = len(q)
 
     recip_lat = reciprocal_vecs(real_lat)
+    # print(real_lat)
+    # print(recip_lat)
     
     K1, K2, K3 = mesh_dims
 
@@ -241,24 +182,19 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
     u = np.array([mesh_dims * np.matmul(recip_lat, r[i,:]) for i in range(r.shape[0])])
 
     #Fill Q array (interpolate charge onto grid)
-    spline_vals = calc_bsplines(100000, spline_interp_order)
-    
-    # Q, dQdr = build_Q(u, spline_interp_order, charges, K1, K2, K3, spline_vals)
-    #should be equiv & faster than mine but only works order 4
-    Q, dQdr = build_Q2(u, charges, spline_interp_order, K1, K2, K3)
-    # plt.imshow(Q[:,:,2])
-    # print(np.amax(Q - Q2))
+    Q, dQdr = build_Q(u, spline_interp_order, charges, K1, K2, K3)
+    print(np.amax(Q))
     print("\tQ Calculated")
 
-    BC = calc_BC(alpha, V, K1, K2, K3, spline_interp_order, recip_lat, real_lat)
-
+    BC = calc_BC(alpha, V, K1, K2, K3, spline_interp_order, recip_lat)
+    print(np.amax(BC))
     #Invert Q 
-    Q_recip = np.fft.fftn(np.complex_(Q))
+    Q_recip = np.fft.fftn(Q)
     Q_recip *= BC
     QBC_real_space = np.fft.ifftn(Q_recip) #can do in place?
 
     print(np.amax(np.abs(QBC_real_space)))
-    E_out = np.sum(np.real(QBC_real_space) * np.real(Q))
+    E_out = 0.5*np.sum(np.real(QBC_real_space) * np.real(Q))
   
     # E_out *= 0.5 #necessar?
 
@@ -348,7 +284,7 @@ if __name__ == "__main__":
     #positions are (Nx3) masses, charges (Nx1), boxsize (3x1)
     N_steps = 11
     positions, forces_lmp, eng_lmp, masses, charges, box_sizes = load_system(dump_path, N_steps)
-    for i in range(3):
+    for i in range(1):
         print(f"ON LOOP ITERATION {i}")
         U_LJ, F_LJ = lj_energy_loop(positions[:,:,i], charges, box_sizes, r_cut_lj)
 
