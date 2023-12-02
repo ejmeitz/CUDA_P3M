@@ -1,20 +1,18 @@
-include("init.jl")
+using LongRangeInteractions
+using TimerOutputs
 
-#Interesting info from GROMACS on parallelization strategy
-# https://manual.gromacs.org/current/reference-manual/algorithms/parallelization-domain-decomp.html#mpmdpme
 
-#& Double check these are being parsed correctly
-# Lammps can only give you coulombic energies, not forces
-# will need to calculate the LJ part of the force manually and subtract.
+#Initialize System from LAMMPS Data
 trajectory, charges, masses, lammps_coul_energies, lammps_forces_all = load_test_data()
+atoms = 
+sys = System(atoms)
+
+
 
 const timer = TimerOutput()
 
 logger_output = joinpath(@__DIR__, "logs")
 
-pp = PP()
-pm = PM()
-p3m = P3M(pp, pm)
 
 lammps_errors = []
 bruteforce_errors = []

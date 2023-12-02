@@ -3,6 +3,7 @@ module LongRangeInteractions
 using LinearAlgebra
 using StructArrays
 using TimerOutputs
+using Unitful
 
 #include all files here
 include("types.jl")

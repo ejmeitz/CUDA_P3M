@@ -124,7 +124,7 @@ def build_Q(u, n, charges, K1, K2, K3):
 
             q_n_0 = charges[i]*M(u[i,0] - l0, n) #if 0 <= u_i0 - l0 <= n will be non-zero
 
-            l0 += n//2 # Shift
+            l0 += int(np.ceil(n/2)) # Shift
             if l0 < 0: # Apply PBC
                 l0 += K1
             elif l0 >= K1:
@@ -136,7 +136,7 @@ def build_Q(u, n, charges, K1, K2, K3):
                 q_n_1 = q_n_0*M(u[i,1] - l1, n) #if 0 <= u_i1 - l1 <= n will be non-zero
 
 
-                l1 += n//2 # Shift
+                l1 += int(np.ceil(n/2)) # Shift
                 if l1 < 0: # Apply PBC
                     l1 += K2
                 elif l1 >= K2:
@@ -148,7 +148,7 @@ def build_Q(u, n, charges, K1, K2, K3):
                     q_n_2 = q_n_1*M(u[i,2] - l2, n) #if 0 <= u_i1 - l1 <= n will be non-zero
 
 
-                    l2 += n//2 # Shift
+                    l2 += int(np.ceil(n/2)) # Shift
                     if l2 < 0: # Apply PBC
                         l2 += K2
                     elif l2 >= K2:
