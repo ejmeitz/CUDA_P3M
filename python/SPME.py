@@ -50,9 +50,9 @@ def particle_particle(r, q, alpha, r_cut, real_lat):
                             F_ij = F_ij*r_hat
 
                             F_direct[i,:] += F_ij
-                            F_direct[j,:] -= F_ij #on GPU this is not worth doing
 
-    return U_direct, F_direct
+
+    return 0.5*U_direct, F_direct
 
 #From appendix B
 def M(u, n):
@@ -76,8 +76,9 @@ def dMdu(u,n):
 # Make this non-allocating
 # Make this not use np.exp(j) just manage cos() and sin() manually
 def b(m, K, n): #n is spline order
-    num = np.exp(2*np.pi*1.0j*(n-1)*m/K)
-    denom = np.sum([M(k+1, n)*np.exp(2*np.pi*1.0j*m*k/K) for k in range(n-1)])
+    m_K = m/K
+    num = np.exp(2*np.pi*1j*(n-1)*m_K)
+    denom = np.sum([M(k+1, n)*np.exp(2*np.pi*1j*k*m_K) for k in range(n-1)])
     return  num/denom 
 
 
@@ -95,14 +96,16 @@ def calc_BC(alpha, V, K1, K2, K3, n, recip_lat):
 
     for m1 in range(K1):
         hs[0] = m1 if (m1 <= (K1/2)) else m1 - K1
+        B1 = abs2(b(m1,K1,n))
         for m2 in range(K2):
             hs[1] = m2 if (m2 <= (K2/2)) else m2 - K2
+            B2 = B1*abs2(b(m2,K2,n))
             for m3 in range(K3):
                 hs[2] = m3 if (m3 <= (K3/2)) else m3 - K3
                 if m1 == 0 and m2 == 0 and m3 == 0:
                     continue
                 
-                B = abs2(b(m1,K1,n))* abs2(b(m2,K2,n)) * abs2(b(m3,K3,n))
+                B3 = B2*abs2(b(m3,K3,n))
                 # B = (np.abs(b(m1,K1,n)) )* (np.abs(b(m2,K2,n))) * (np.abs(b(m3,K3,n)))
                 # B = np.linalg.norm(b(m1,K1,n)*b(m2,K2,n)*b(m3,K3,n))
                 C = calc_C(alpha, V, hs, recip_lat)
@@ -110,7 +113,7 @@ def calc_BC(alpha, V, K1, K2, K3, n, recip_lat):
                 # m_star = hs[0]*recip_lat[0,:] + hs[1]*recip_lat[1,:] + hs[2]*recip_lat[2,:]
                 # m_sq = np.dot(m_star,m_star)
 
-                BC[m1,m2,m3] = B * C#psi(m_sq, V, alpha)
+                BC[m1,m2,m3] = B3*C
 
     return BC
 
@@ -163,7 +166,7 @@ def build_Q(u, n, charges, K1, K2, K3):
                     # dQdr[i, 2, int(l0), int(l1), int(l2)] += 0.0
     return Q, dQdr
 
-
+### TEST
 def initialize_table(K1,K2,K3, recip_lat, n, alpha, V):
   
   BC = np.zeros((K1,K2,K3))
@@ -203,6 +206,8 @@ def psi(h2, alpha, V):
   return pow(np.pi, 9.0 / 2.0) / (3.0 * V) * h3 \
       * (np.sqrt(np.pi) * ss.erfc(b) + (1.0 / (2.0 * b3) - 1.0 / b) * np.exp(-b2))
 
+######
+
 #Calculate E_reciprocal
 def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
 
@@ -212,8 +217,6 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
     
     K1, K2, K3 = mesh_dims
     V = vol(real_lat)
-    print(V)
-    print(K1, K2 , K3)
     print("ALpha: ", alpha)
 
     #convert coordinates to fractional
@@ -223,7 +226,7 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
 
     #Fill Q array (interpolate charge onto grid)
     Q, dQdr = build_Q(u, spline_interp_order, charges, K1, K2, K3)
-    print(np.amax(Q))
+
     print("\tQ Calculated")
 
     BC = calc_BC(alpha, V, K1, K2, K3, spline_interp_order, recip_lat)
@@ -279,9 +282,6 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
     print(f"\tP-M Energy Calculated")
     self_eng = self_energy(q, alpha)
 
-    # pm_energy = 0.0
-    # pm_force = 0.0
-
     # e_charge = 1.60217663e-19 #C
     # k = (1/(4*np.pi*scipy.constants.epsilon_0)) # N-m^2 * C^2
     # A = e_charge*e_charge*k*1e7 # kJ*Ang
@@ -318,8 +318,8 @@ if __name__ == "__main__":
     r_cut_lj = 7.0 #needs to be less then 8 for box size w/ 3 UC
     r_cut_real = 10.0 #kinda picked randomly
     r_cut_neighbor = r_cut_real + 1.0 #not sure what this should be
-    error_tol = 1e-4 #GPU OpenMM warns 5e-5 is lower limit and error can start going up (should check when we do GPU)
-    spline_interp_order = 4 #OpenMM uses 5
+    error_tol = 1e-5 #GPU OpenMM warns 5e-5 is lower limit and error can start going up (should check when we do GPU)
+    spline_interp_order = 6 #OpenMM uses 5
 
 
     dump_path = os.path.join(r"../test_data\salt_sim\dump.atom")
