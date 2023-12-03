@@ -1,5 +1,6 @@
-function run(spme::SPME{SingleThread})
+function run!(spme::SPME{SingleThread})
 
+    #& could write to reuse storage for F
     E_dir, F_dir = particle_particle(spme)
     E_rec, F_rec = particle_mesh(spme)
     E_self = self_energy(spme)

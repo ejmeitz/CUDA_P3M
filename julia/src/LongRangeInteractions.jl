@@ -5,12 +5,13 @@ using StructArrays
 using TimerOutputs
 using Unitful
 
-#include all files here
-include("types.jl")
-include("dump_parser.jl")
-include("test.jl")
+using CUDE #this should be conditionally loaded if TargetDevice is a GPU
 
-include("particle_particle.jl")
-include("particle_mesh.jl")
+include("types.jl")
+
+include("./methods/SPME/splines.jl")
+include("./methods/SPME/interpolate_charge.jl")
+include("./methods/SPME/particle_particle.jl")
+include("./methods/SPME/particle_mesh.jl")
 
 end

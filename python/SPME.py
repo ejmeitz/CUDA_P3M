@@ -86,6 +86,8 @@ def calc_C(alpha, V, ms, recip_lat):
     m_sq = np.dot(m_star,m_star)
     return (1/(np.pi*V))*(np.exp(-(np.pi**2)*m_sq/(alpha**2))/m_sq)
     
+def abs2(x : np.complex128):
+    return (x.real**2) + (x.imag**2)
 
 def calc_BC(alpha, V, K1, K2, K3, n, recip_lat):
     BC = np.zeros((K1,K2,K3), dtype = np.complex128)
@@ -100,7 +102,7 @@ def calc_BC(alpha, V, K1, K2, K3, n, recip_lat):
                 if m1 == 0 and m2 == 0 and m3 == 0:
                     continue
                 
-                B = (np.abs(b(m1,K1,n))**2 )* (np.abs(b(m2,K2,n))**2) * (np.abs(b(m3,K3,n)**2))
+                B = abs2(b(m1,K1,n))* abs2(b(m2,K2,n)) * abs2(b(m3,K3,n))
                 # B = (np.abs(b(m1,K1,n)) )* (np.abs(b(m2,K2,n))) * (np.abs(b(m3,K3,n)))
                 # B = np.linalg.norm(b(m1,K1,n)*b(m2,K2,n)*b(m3,K3,n))
                 C = calc_C(alpha, V, hs, recip_lat)
@@ -162,6 +164,44 @@ def build_Q(u, n, charges, K1, K2, K3):
     return Q, dQdr
 
 
+def initialize_table(K1,K2,K3, recip_lat, n, alpha, V):
+  
+  BC = np.zeros((K1,K2,K3))
+  
+  for k0 in range(K1):
+    h0 = k0 if k0 < K1 / 2 else k0 - K1;
+
+    for k1 in range(K2):
+      h1 = k1 if k1 < K2 / 2 else k1 - K2;
+
+      for k2 in range(K3):
+
+        if k0 == 0 and k1 == 0 and k2 == 0:
+          continue;
+
+        h2 = k2 if k2 < K3 / 2 else k2 - K3
+
+        hs = [h0, h1, h2 ]
+        m = np.matmul(recip_lat.T, hs)
+
+        m_sq = np.dot(m, m)
+
+        # B = (np.abs(b(k0,K1,n))**2 )* (np.abs(b(k1,K2,n))**2) * (np.abs(b(k2,K3,n)**2))
+        B =  np.linalg.norm(b(k0, K1, n)* b(k1, K2, n) * b(k2, K3, n))
+
+        BC[k0,k1,k2] = psi(m_sq, alpha, V) * B
+  return BC
+
+def psi(h2, alpha, V):
+  b2 = np.pi * h2 / (alpha*alpha)
+  b = np.sqrt(b2)
+  b3 = b2 * b
+
+  h = np.sqrt(h2)
+  h3 = h2 * h
+
+  return pow(np.pi, 9.0 / 2.0) / (3.0 * V) * h3 \
+      * (np.sqrt(np.pi) * ss.erfc(b) + (1.0 / (2.0 * b3) - 1.0 / b) * np.exp(-b2))
 
 #Calculate E_reciprocal
 def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
@@ -169,12 +209,12 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
     N_atoms = len(q)
 
     recip_lat = reciprocal_vecs(real_lat)
-    # print(real_lat)
-    # print(recip_lat)
     
     K1, K2, K3 = mesh_dims
-
     V = vol(real_lat)
+    print(V)
+    print(K1, K2 , K3)
+    print("ALpha: ", alpha)
 
     #convert coordinates to fractional
     #make this non-allocating in Julia
@@ -187,16 +227,26 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
     print("\tQ Calculated")
 
     BC = calc_BC(alpha, V, K1, K2, K3, spline_interp_order, recip_lat)
-    print(np.amax(BC))
+    # print(np.amax(BC))
+    # BC = initialize_table(K1, K2, K3, recip_lat, spline_interp_order, alpha, V)
+    # print(np.amax(BC))
     #Invert Q 
-    Q_recip = np.fft.fftn(Q)
-    Q_recip *= BC
-    QBC_real_space = np.fft.ifftn(Q_recip) #can do in place?
+    # Q_recip = np.fft.fftn(np.complex128(Q))
 
-    print(np.amax(np.abs(QBC_real_space)))
-    E_out = 0.5*np.sum(np.real(QBC_real_space) * np.real(Q))
-  
-    # E_out *= 0.5 #necessar?
+    # Q_recip *= BC
+    
+    # Q_conv_theta = np.fft.ifftn(Q_recip) #can do in place
+
+
+    Q_inv = np.fft.ifftn(np.complex128(Q))
+
+    Q_inv *= BC
+
+    Q_conv_theta = np.fft.fftn(Q_inv)
+
+    print(np.amax(np.abs(Q_conv_theta)))
+    E_out = 0.5*np.sum(np.real(Q_conv_theta) * np.real(Q))
+    # print(f"E recip: {E_out*K1*K2*K3*322}")
 
     F_out = np.zeros((N_atoms, 3))
     # for i in range(N_atoms):
@@ -221,8 +271,7 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
     #Look at FFT implementation it can be better if this is a factor of some prime number
     n_mesh = np.ceil(2*alpha*L/(3*np.power(error_tol, 0.2))).astype(np.int64)
 
-    # n_mesh = [6,6,6] #idk its slow as shit with that eqn ^
-
+    
     pp_energy, pp_force = particle_particle(r, q, alpha, r_cut_real, real_lat_vec)
     print(f"\tP-P Energy Calculated")
     print(f"\tN-Mesh {n_mesh}")
@@ -230,8 +279,8 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
     print(f"\tP-M Energy Calculated")
     self_eng = self_energy(q, alpha)
 
-    pm_energy = 0.0
-    pm_force = 0.0
+    # pm_energy = 0.0
+    # pm_force = 0.0
 
     # e_charge = 1.60217663e-19 #C
     # k = (1/(4*np.pi*scipy.constants.epsilon_0)) # N-m^2 * C^2
