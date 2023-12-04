@@ -160,47 +160,6 @@ def build_Q(u, n, charges, K1, K2, K3):
                     # dQdr[i, 2, int(l0), int(l1), int(l2)] += 0.0
     return Q, dQdr
 
-### TEST
-def initialize_table(K1,K2,K3, recip_lat, n, alpha, V):
-  
-  BC = np.zeros((K1,K2,K3))
-  
-  for k0 in range(K1):
-    h0 = k0 if k0 < K1 / 2 else k0 - K1;
-
-    for k1 in range(K2):
-      h1 = k1 if k1 < K2 / 2 else k1 - K2;
-
-      for k2 in range(K3):
-
-        if k0 == 0 and k1 == 0 and k2 == 0:
-          continue;
-
-        h2 = k2 if k2 < K3 / 2 else k2 - K3
-
-        hs = [h0, h1, h2 ]
-        m = np.matmul(recip_lat.T, hs)
-
-        m_sq = np.dot(m, m)
-
-        # B = (np.abs(b(k0,K1,n))**2 )* (np.abs(b(k1,K2,n))**2) * (np.abs(b(k2,K3,n)**2))
-        B =  np.linalg.norm(b(k0, K1, n)* b(k1, K2, n) * b(k2, K3, n))
-
-        BC[k0,k1,k2] = psi(m_sq, alpha, V) * B
-  return BC
-
-def psi(h2, alpha, V):
-  b2 = np.pi * h2 / (alpha*alpha)
-  b = np.sqrt(b2)
-  b3 = b2 * b
-
-  h = np.sqrt(h2)
-  h3 = h2 * h
-
-  return pow(np.pi, 9.0 / 2.0) / (3.0 * V) * h3 \
-      * (np.sqrt(np.pi) * ss.erfc(b) + (1.0 / (2.0 * b3) - 1.0 / b) * np.exp(-b2))
-
-######
 
 #Calculate E_reciprocal for SPME
 def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
