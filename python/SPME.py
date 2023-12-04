@@ -21,7 +21,6 @@ def particle_particle(r, q, alpha, r_cut, real_lat):
     #* Can be pre-calculated outside of function
     N1, N2, N3 = get_N_cells(real_lat, r_cut)
 
-    #* Fix this so it interacts with its own mirror particles (just not itself)
     for n1 in range(-N1,N1+1):
         for n2 in range(-N2,N2+1):
             for n3 in range(-N3,N3+1):
