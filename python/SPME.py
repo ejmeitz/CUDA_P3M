@@ -20,7 +20,6 @@ def particle_particle(r, q, alpha, r_cut, real_lat):
     #Calculate number of cells in each direction that could be reached given r_cut
     #* Can be pre-calculated outside of function
     N1, N2, N3 = get_N_cells(real_lat, r_cut)
-    print(f"N-Real [{N1} {N2} {N3}]")
 
     #* Fix this so it interacts with its own mirror particles (just not itself)
     for n1 in range(-N1,N1+1):
@@ -217,7 +216,6 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
     
     K1, K2, K3 = mesh_dims
     V = vol(real_lat)
-    print("ALpha: ", alpha)
 
     #convert coordinates to fractional
     #make this non-allocating in Julia
@@ -227,18 +225,7 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
     #Fill Q array (interpolate charge onto grid)
     Q, dQdr = build_Q(u, spline_interp_order, charges, K1, K2, K3)
 
-    print("\tQ Calculated")
-
     BC = calc_BC(alpha, V, K1, K2, K3, spline_interp_order, recip_lat)
-    # print(np.amax(BC))
-    # BC = initialize_table(K1, K2, K3, recip_lat, spline_interp_order, alpha, V)
-    # print(np.amax(BC))
-    #Invert Q 
-    # Q_recip = np.fft.fftn(np.complex128(Q))
-
-    # Q_recip *= BC
-    
-    # Q_conv_theta = np.fft.ifftn(Q_recip) #can do in place
 
 
     Q_inv = np.fft.ifftn(np.complex128(Q))
@@ -249,7 +236,6 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
 
     print(np.amax(np.abs(Q_conv_theta)))
     E_out = 0.5*np.sum(np.real(Q_conv_theta) * np.real(Q))
-    # print(f"E recip: {E_out*K1*K2*K3*322}")
 
     F_out = np.zeros((N_atoms, 3))
     # for i in range(N_atoms):
@@ -277,10 +263,7 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
 
     
     pp_energy, pp_force = particle_particle(r, q, alpha, r_cut_real, real_lat_vec)
-    print(f"\tP-P Energy Calculated")
-    print(f"\tN-Mesh {n_mesh}")
     pm_energy, pm_force = particle_mesh(r, q, real_lat_vec, alpha, spline_interp_order, n_mesh)
-    print(f"\tP-M Energy Calculated")
     self_eng = self_energy(q, alpha)
 
     # e_charge = 1.60217663e-19 #C
@@ -290,14 +273,16 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
 
     A = 332.0637128
 
-    print(f"PP Energy: {np.sum(pp_energy*A)}")
-    print(f"PM Energy {np.sum(pm_energy)*A}")
-    print(f"Self Energy {np.sum(self_eng)*A}")
-    print(f"Total Ewald Eng {(np.sum(pp_energy) + np.sum(pm_energy) + np.sum(self_eng))*A}")
+    # print(f"PP Energy: {np.sum(pp_energy*A)}")
+    # print(f"PM Energy {pm_energy*A}")
+    # print(f"Self Energy {self_eng*A}")
+    # print(f"Total Ewald Eng {(np.sum(pp_energy) + pm_energy + self_eng)*A}")
 
-    U_SPME = pp_energy + pm_energy + self_eng
+
+    U_SPME = A*(pp_energy + pm_energy + self_eng)
     F_SPME = pp_force + pm_force
-
+    print((np.sum(pp_energy) + pm_energy + self_eng)*A)
+    print(np.sum(U_SPME))
     # This artifact can be avoided by removing the average net force
     # from each atom at each step of the simulation
 
@@ -338,13 +323,12 @@ if __name__ == "__main__":
         print(f"ON LOOP ITERATION {i}")
         U_LJ, F_LJ = lj_energy_loop(positions[:,:,i], charges, box_sizes, r_cut_lj)
 
-        print(f"\t LJ Energy Calculated")
         #TBH no clue how to use this
         # i_inds, j_inds, _ = cl.neighborlist(positions[:,:,i], r_cut_neighbor, unitcell=np.array([1, 1, 1]))
         U_SPME, F_SPME = PME(positions[:,:,i], charges, real_lat_vecs, error_tol, r_cut_real, spline_interp_order)
         # print(f"\t PME Energy Calculated")
 
-
+        print(f"U_total {np.sum(U_SPME + U_LJ)}")
         # print(U_SPME)
         # rms_eng_error = rms_error(U_SPME + U_LJ, forces_lmp)p
         # rms_force_error = rms_error(F_SPME + F_LJ, eng_lmp) #force format might not work since its Nx3
