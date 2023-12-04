@@ -85,6 +85,13 @@ def reciprocal_vecs(lat_vecs):
     m3 = np.cross(lat_vecs[:,0], lat_vecs[:,1])/V
     return np.array([m1,m2,m3])
 
+def reciprocal_vecs_twopi(lat_vecs):
+    V = vol(lat_vecs)
+    m1 = 2*np.pi*np.cross(lat_vecs[:,1], lat_vecs[:,2])/V
+    m2 = 2*np.pi*np.cross(lat_vecs[:,2], lat_vecs[:,0])/V
+    m3 = 2*np.pi*np.cross(lat_vecs[:,0], lat_vecs[:,1])/V
+    return np.array([m1,m2,m3])
+
 def nearest_mirror(r_ij,box_sizes):
     Lx,Ly,Lz = box_sizes
     r_x,r_y,r_z = r_ij

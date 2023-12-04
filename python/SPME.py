@@ -288,7 +288,7 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
     # A = e_charge*e_charge*k*1e7 # kJ*Ang
     # A *= (23.06/(1.60818e-22)) # kcal/mol/Ang #fuck this unit system
 
-    A = 332.218
+    A = 332.0637128
 
     print(f"PP Energy: {np.sum(pp_energy*A)}")
     print(f"PM Energy {np.sum(pm_energy)*A}")
@@ -317,7 +317,7 @@ def rms_error(a, b):
 if __name__ == "__main__":
 
     r_cut_lj = 7.0 #needs to be less then 8 for box size w/ 3 UC
-    r_cut_real = 10.0 #kinda picked randomly
+    r_cut_real = 7.0 #kinda picked randomly, does this need to be less than L/2?
     r_cut_neighbor = r_cut_real + 1.0 #not sure what this should be
     error_tol = 1e-5 #GPU OpenMM warns 5e-5 is lower limit and error can start going up (should check when we do GPU)
     spline_interp_order = 6 #OpenMM uses 5

@@ -57,24 +57,6 @@ def rec_sum(r, q, alpha, recip_lat, k_cut, V):
     Kx, Ky, Kz = k_cut
     a_inv_sq = (1/alpha)**2
 
-    #Precompute k-vectors and structure factor
-    # k_vecs = np.zeros((2*Kx+1, 2*Ky+1, 2*Kz+1, 3))
-    # k_sqs = np.zeros((2*Kx+1, 2*Ky+1, 2*Kz+1))
-    # S = np.zeros((2*Kx+1, 2*Ky+1, 2*Kz+1))
-
-    # for k1 in range(-Kx,Kx+1):
-    #     for k2 in range(-Ky,Ky+1):
-    #         for k3 in range(-Kz,Kz+1):
-    #             # k_vecs[k1 + Kx, k2 + Ky, k3 + Kz , :] = k1*recip_lat[0,:] + k2*recip_lat[1,:] + k3*recip_lat[2,:]
-    #             k_vec = k1*recip_lat[0,:] + k2*recip_lat[1,:] + k3*recip_lat[2,:]
-    #             k_sqs[k1 + Kx, k2 + Ky, k3 + Kz] = np.dot(k_vec, k_vec)
-    #             S[k1 + Kx, k2 + Ky, k3 + Kz] = abs2(np.sum([q*np.exp(1j*(np.dot(k_vec, r[i,:]))) for i in range(N_atoms)]))
-
-    #Calculate energy
-    # for i in range(N_atoms):
-    #     for j in range(N_atoms):
-
-            # r_ij = r[i] - r[j]
 
     for k1 in range(-Kx,Kx+1):
         for k2 in range(-Ky,Ky+1):
@@ -127,7 +109,7 @@ def Ewald(r, q, real_lat_vec, error_tol, r_cut_real):
     k_cut = get_k_cut(error_tol, alpha, L)
 
     V = vol(real_lat_vec)
-    recip_lat = reciprocal_vecs(real_lat_vec)
+    recip_lat = reciprocal_vecs_twopi(real_lat_vec) #* Should this have 2 pi??
     
     
     E_dir, F_dir = direct_sum(r, q, alpha, real_lat_vec, r_cut_real)
@@ -137,7 +119,7 @@ def Ewald(r, q, real_lat_vec, error_tol, r_cut_real):
     print(f"\tRecip Energy Calculated")
     self_eng = self_energy(q, alpha)
 
-    A = 332.218 #1/4pie_0 in correct units
+    A = 332.0637128 #1/4pie_0 in correct units
 
     print(f"Real Energy: {np.sum(E_dir)*A}")
     print(f"Recip Energy {np.sum(E_rec)*A*4*np.pi}")
@@ -152,7 +134,7 @@ def Ewald(r, q, real_lat_vec, error_tol, r_cut_real):
 if __name__ == "__main__":
 
     r_cut_lj = 7.0 #needs to be less then 8 for box size w/ 3 UC
-    r_cut_real = 10.0 #kinda picked randomly
+    r_cut_real = 7.0 #kinda picked randomly
     error_tol = 1e-5 
 
     dump_path = os.path.join(r"../test_data\salt_sim\dump.atom")
