@@ -27,6 +27,9 @@ timestep 2.0
 compute 1 all pe/atom
 compute 2 all pair lj/cut/coul/long ecoul
 compute 3 all pair lj/cut/coul/long evdwl
+compute 4 all pe
+variable elong equal elong
+
 
 variable T equal 300
 velocity all create ${T} 31454 dist gaussian mom yes
@@ -35,6 +38,6 @@ velocity all create ${T} 31454 dist gaussian mom yes
 # Run simulation
 fix 1 all nve
 dump data all custom 10000 dump.atom id q mass x y z fx fy fz c_1 #c_2 c_3
-fix eng_print all print 10000 "$(c_2) $(c_3)" file energy_breakdown.txt
+fix eng_print all print 10000 "$(c_2) $(v_elong) $(c_3) $(c_4)" file energy_breakdown.txt
 dump_modify data sort id
 run 100000
