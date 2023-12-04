@@ -153,7 +153,7 @@ if __name__ == "__main__":
 
     r_cut_lj = 7.0 #needs to be less then 8 for box size w/ 3 UC
     r_cut_real = 10.0 #kinda picked randomly
-    error_tol = 1e-4 
+    error_tol = 1e-5 
 
     dump_path = os.path.join(r"../test_data\salt_sim\dump.atom")
 
@@ -166,7 +166,7 @@ if __name__ == "__main__":
     #positions are (Nx3) masses, charges (Nx1), boxsize (3x1)
     N_steps = 11
     positions, forces_lmp, eng_lmp, masses, charges, box_sizes = load_system(dump_path, N_steps)
-    for i in range(1):
+    for i in range(2):
         print(f"ON LOOP ITERATION {i}")
         U_LJ, F_LJ = lj_energy_loop(positions[:,:,i], charges, box_sizes, r_cut_lj)
 
