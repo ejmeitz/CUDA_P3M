@@ -105,12 +105,7 @@ def calc_BC(alpha, V, K1, K2, K3, n, recip_lat):
                     continue
                 
                 B3 = B2*abs2(b(m3,K3,n))
-                # B = (np.abs(b(m1,K1,n)) )* (np.abs(b(m2,K2,n))) * (np.abs(b(m3,K3,n)))
-                # B = np.linalg.norm(b(m1,K1,n)*b(m2,K2,n)*b(m3,K3,n))
                 C = calc_C(alpha, V, hs, recip_lat)
-
-                # m_star = hs[0]*recip_lat[0,:] + hs[1]*recip_lat[1,:] + hs[2]*recip_lat[2,:]
-                # m_sq = np.dot(m_star,m_star)
 
                 BC[m1,m2,m3] = B3*C
 
@@ -228,13 +223,15 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
     BC = calc_BC(alpha, V, K1, K2, K3, spline_interp_order, recip_lat)
 
 
-    Q_inv = np.fft.ifftn(np.complex128(Q))
+    # Q_inv = np.fft.ifftn(np.complex128(Q))
+    # Q_inv *= BC
+    # Q_conv_theta = np.fft.fftn(Q_inv)
 
+    Q_inv = np.fft.fftn(np.complex128(Q))
     Q_inv *= BC
+    Q_conv_theta = np.fft.ifftn(Q_inv)
 
-    Q_conv_theta = np.fft.fftn(Q_inv)
 
-    print(np.amax(np.abs(Q_conv_theta)))
     E_out = 0.5*np.sum(np.real(Q_conv_theta) * np.real(Q))
 
     F_out = np.zeros((N_atoms, 3))
@@ -278,11 +275,8 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
     # print(f"Self Energy {self_eng*A}")
     # print(f"Total Ewald Eng {(np.sum(pp_energy) + pm_energy + self_eng)*A}")
 
-
-    U_SPME = A*(pp_energy + pm_energy + self_eng)
+    U_SPME_total = (np.sum(pp_energy) + pm_energy + self_eng)*A
     F_SPME = pp_force + pm_force
-    print((np.sum(pp_energy) + pm_energy + self_eng)*A)
-    print(np.sum(U_SPME))
     # This artifact can be avoided by removing the average net force
     # from each atom at each step of the simulation
 
@@ -290,7 +284,7 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
     avg_net_force = 0.0 #tf u take the average of?
 
 
-    return U_SPME, F_SPME - avg_net_force
+    return U_SPME_total, F_SPME - avg_net_force
 
 
 def rms_error(a, b):
@@ -308,7 +302,7 @@ if __name__ == "__main__":
     spline_interp_order = 5 #OpenMM uses 5
 
 
-    dump_path = os.path.join(r"../test_data\salt_sim\dump.atom")
+    dump_path = os.path.join(r"../test_data/salt_sim/dump.atom")
 
 
     lattice_param = 5.62 #Angstroms
@@ -319,19 +313,17 @@ if __name__ == "__main__":
     #positions are (Nx3) masses, charges (Nx1), boxsize (3x1)
     N_steps = 11
     positions, forces_lmp, eng_lmp, masses, charges, box_sizes = load_system(dump_path, N_steps)
-    for i in range(1):
+    for i in range(N_steps):
         print(f"ON LOOP ITERATION {i}")
         U_LJ, F_LJ = lj_energy_loop(positions[:,:,i], charges, box_sizes, r_cut_lj)
 
         #TBH no clue how to use this
         # i_inds, j_inds, _ = cl.neighborlist(positions[:,:,i], r_cut_neighbor, unitcell=np.array([1, 1, 1]))
-        U_SPME, F_SPME = PME(positions[:,:,i], charges, real_lat_vecs, error_tol, r_cut_real, spline_interp_order)
+        U_SPME_total, F_SPME = PME(positions[:,:,i], charges, real_lat_vecs, error_tol, r_cut_real, spline_interp_order)
         # print(f"\t PME Energy Calculated")
 
-        print(f"U_total {np.sum(U_SPME + U_LJ)}")
-        # print(U_SPME)
-        # rms_eng_error = rms_error(U_SPME + U_LJ, forces_lmp)p
-        # rms_force_error = rms_error(F_SPME + F_LJ, eng_lmp) #force format might not work since its Nx3
+        print(f"U_total {U_SPME_total + np.sum(U_LJ)}")
+
 
 
     

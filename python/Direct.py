@@ -32,15 +32,15 @@ def direct_sum(r, q, real_lat, r_cut):
                         r_ijn = r[i] - r[j] + n_vec
                         dist_ijn = np.linalg.norm(r_ijn)
 
-                        if dist_ijn < r_cut:
-                            U_direct[i] += q[i] * q[j] / dist_ijn
+                        # if dist_ijn < r_cut: #why this fuck up convergence???
+                        U_direct[i] += q[i] * q[j] / dist_ijn
 
-                            F_ij = q[i] * q[j] #TODO  #TODO
+                        F_ij = q[i] * q[j] #TODO  #TODO
 
-                            r_hat = r_ijn / dist_ijn 
-                            F_ij = F_ij*r_hat
+                        r_hat = r_ijn / dist_ijn 
+                        F_ij = F_ij*r_hat
 
-                            F_direct[i,:] += F_ij
+                        F_direct[i,:] += F_ij
 
 
     return 0.5*U_direct, F_direct

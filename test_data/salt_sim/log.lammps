@@ -1,7 +1,6 @@
-LAMMPS (3 Aug 2022)
+LAMMPS (28 Mar 2023 - Development)
 OMP_NUM_THREADS environment is not set. Defaulting to 1 thread. (src/comm.cpp:98)
   using 1 OpenMP thread(s) per MPI task
-Loaded 1 plugins from C:\Users\ejmei\AppData\Local\LAMMPS 64-bit 3Aug2022\plugins
 # LAMMPS input script for NaCl crystal simulation with real units
 
 units real
@@ -13,12 +12,12 @@ atom_style charge
 read_data salt3UC.positions
 Reading data file ...
   orthogonal box = (0 0 0) to (16.86 16.86 16.86)
-  1 by 1 by 1 MPI processor grid
+  1 by 2 by 2 MPI processor grid
   reading atoms ...
   216 atoms
   reading velocities ...
   216 velocities
-  read_data CPU = 0.004 seconds
+  read_data CPU = 0.008 seconds
 
 # Define groups
 group Na type 1
@@ -52,7 +51,8 @@ velocity all create 300 31454 dist gaussian mom yes
 
 # Run simulation
 fix 1 all nve
-dump data all custom 10000 dump.atom id q mass x y z fx fy fz c_1 #c_2 c_3
+dump data all custom 10000 dump.atom id q mass x y z fx fy fz c_1
+dump_modify data format line "%d %.1f %.4f %.9f %.9f %.9f %.9f %.9f %.9f %9f"
 fix eng_print all print 10000 "$(c_2) $(v_elong) $(c_3) $(c_4)" file energy_breakdown.txt
 dump_modify data sort id
 run 100000
@@ -65,7 +65,7 @@ Ewald initialization ...
                   kxmax kymax kzmax  = 6 6 6
 Generated 0 of 1 mixed pair_coeff terms from geometric mixing rule
 Neighbor list info ...
-  update every 1 steps, delay 10 steps, check yes
+  update: every = 1 steps, delay = 0 steps, check = yes
   max neighbors/atom: 2000, page size: 100000
   master list distance cutoff = 12
   ghost atom cutoff = 12
@@ -76,46 +76,46 @@ Neighbor list info ...
       pair build: half/bin/atomonly/newton
       stencil: half/bin/3d
       bin: standard
--9829.5515215678024106 -12473.771959531199172 2818.3302827908973995 -19484.993198308064166
-Per MPI rank memory allocation (min/avg/max) = 15.17 | 15.17 | 15.17 Mbytes
+-9829.5515215675422951 -12473.771959531199172 2818.3302827908582913 -19484.993198307842249
+Per MPI rank memory allocation (min/avg/max) = 15.07 | 15.07 | 15.07 Mbytes
    Step          Temp          E_pair         E_mol          TotEng         Press     
          0   300           -19484.993      0             -19292.731      102492.91    
--9817.0614700289461325 -12470.602638754800864 2891.5008455447359665 -19396.163263239013759
--9816.4677279562274634 -12471.226412116200663 2901.2215170205395225 -19386.472623051893606
--9816.9328414781884931 -12470.396441728300488 2889.2014156181812723 -19398.127867588314984
--9817.1143987478189956 -12471.15105075899919 2904.0440389948985285 -19384.221410511898284
--9811.4938909579086612 -12470.696302325399301 2891.5920553902337815 -19390.598137893026433
--9809.5966836410480028 -12470.738425957899381 2891.5311265836357961 -19388.803983015302947
--9813.3347859245768632 -12470.444522289999441 2898.7136293928238047 -19385.065678821731126
--9811.669144974935989 -12470.068948725100199 2896.5699815349876189 -19385.168112165025377
--9814.1505471208092786 -12469.862557663100233 2903.3070564676359027 -19380.706048316307715
--9811.8821862118820718 -12470.411772899500647 2898.8914411285941242 -19383.40251798276222
-    100000   144.74843     -19383.403      0             -19290.637      106346.96    
-Loop time of 256.161 on 1 procs for 100000 steps with 216 atoms
+-9817.0612237878322048 -12470.602573200099869 2891.5010373007007729 -19396.162759687198559
+-9816.4654294744050276 -12471.225627369700305 2901.2179288313036523 -19386.473128012825327
+-9816.936074030414602 -12470.396448636500281 2889.1423301997538147 -19398.190192467151064
+-9817.0985581760542118 -12471.057662524399348 2904.0937651947692757 -19384.062455505649268
+-9814.2360396164876875 -12471.114980753000054 2892.8786802079521294 -19392.472340161533793
+-9811.6856086063926341 -12470.916931952500818 2901.3894087176722678 -19381.213131841184804
+-9815.8017670042863756 -12469.912435805899804 2893.8325924359696728 -19391.881610374231968
+-9815.962653284179396 -12470.707082000899391 2898.0336410452355267 -19388.636094239827798
+-9822.2320818125772348 -12470.944372902700707 2899.053613542817402 -19394.122841172487824
+-9813.1604667227238679 -12470.886440340800618 2898.1691334403208202 -19385.877773623182293
+    100000   148.63763     -19385.878      0             -19290.62       106322.43    
+Loop time of 48.532 on 4 procs for 100000 steps with 216 atoms
 
-Performance: 67.458 ns/day, 0.356 hours/ns, 390.379 timesteps/s
-96.1% CPU use with 1 MPI tasks x 1 OpenMP threads
+Performance: 356.053 ns/day, 0.067 hours/ns, 2060.495 timesteps/s, 445.067 katom-step/s
+96.3% CPU use with 4 MPI tasks x 1 OpenMP threads
 
 MPI task timing breakdown:
 Section |  min time  |  avg time  |  max time  |%varavg| %total
 ---------------------------------------------------------------
-Pair    | 122.99     | 122.99     | 122.99     |   0.0 | 48.01
-Kspace  | 129.58     | 129.58     | 129.58     |   0.0 | 50.58
+Pair    | 15.046     | 15.33      | 15.436     |   4.2 | 31.59
+Kspace  | 24.396     | 24.602     | 24.823     |   3.7 | 50.69
 Neigh   | 0          | 0          | 0          |   0.0 |  0.00
-Comm    | 2.5642     | 2.5642     | 2.5642     |   0.0 |  1.00
-Output  | 0.019702   | 0.019702   | 0.019702   |   0.0 |  0.01
-Modify  | 0.49341    | 0.49341    | 0.49341    |   0.0 |  0.19
-Other   |            | 0.5173     |            |       |  0.20
+Comm    | 7.6396     | 7.9465     | 8.381      |  10.6 | 16.37
+Output  | 0.023744   | 0.029262   | 0.035384   |   2.5 |  0.06
+Modify  | 0.075805   | 0.083302   | 0.097061   |   2.8 |  0.17
+Other   |            | 0.5417     |            |       |  1.12
 
-Nlocal:            216 ave         216 max         216 min
-Histogram: 1 0 0 0 0 0 0 0 0 0
-Nghost:           3159 ave        3159 max        3159 min
-Histogram: 1 0 0 0 0 0 0 0 0 0
-Neighs:          36720 ave       36720 max       36720 min
-Histogram: 1 0 0 0 0 0 0 0 0 0
+Nlocal:             54 ave          54 max          54 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Nghost:           2106 ave        2106 max        2106 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
+Neighs:           9180 ave        9180 max        9180 min
+Histogram: 4 0 0 0 0 0 0 0 0 0
 
 Total # of neighbors = 36720
 Ave neighs/atom = 170
 Neighbor list builds = 0
 Dangerous builds = 0
-Total wall time: 0:04:16
+Total wall time: 0:00:48
