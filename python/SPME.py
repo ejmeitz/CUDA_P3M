@@ -317,10 +317,10 @@ def rms_error(a, b):
 if __name__ == "__main__":
 
     r_cut_lj = 7.0 #needs to be less then 8 for box size w/ 3 UC
-    r_cut_real = 7.0 #kinda picked randomly, does this need to be less than L/2?
+    r_cut_real = 10.0 #kinda picked randomly, does this need to be less than L/2?
     r_cut_neighbor = r_cut_real + 1.0 #not sure what this should be
-    error_tol = 1e-5 #GPU OpenMM warns 5e-5 is lower limit and error can start going up (should check when we do GPU)
-    spline_interp_order = 6 #OpenMM uses 5
+    error_tol = 1e-4 #GPU OpenMM warns 5e-5 is lower limit and error can start going up (should check when we do GPU)
+    spline_interp_order = 5 #OpenMM uses 5
 
 
     dump_path = os.path.join(r"../test_data\salt_sim\dump.atom")
