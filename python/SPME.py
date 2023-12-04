@@ -208,7 +208,7 @@ def psi(h2, alpha, V):
 
 ######
 
-#Calculate E_reciprocal
+#Calculate E_reciprocal for SPME
 def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
 
     N_atoms = len(q)
@@ -258,6 +258,7 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
  
 
     return E_out, F_out
+
 
 
 def self_energy(q, alpha):
