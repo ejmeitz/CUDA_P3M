@@ -1,330 +1,37 @@
 <!DOCTYPE html>
-
 <html>
-  <head>
-    <title>CUDA P3M Proposal</title>
+<head>
+    <title>Project Milestone Report</title>
     <style>
-      body {
-        font-family: Arial, sans-serif;
-        margin: 10vw;
-      }
-
-      h2 {
-        color: #333;
-      }
-
-      p,
-      ol {
-        color: #333;
-        margin-bottom: 15px;
-      }
-
-      li {
-        margin-bottom: 5px;
-      }
+        body {
+            font-family: 'Times New Roman', Times, serif;
+        }
+        h1, h2 {
+            font-weight: bold;
+        }
+        .underline {
+            text-decoration: underline;
+        }
     </style>
-    <script
-      type="text/javascript"
-      async
-      src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML"
-    ></script>
-    <script type="text/x-mathjax-config">
-      MathJax.Hub.Config({
-          tex2jax: {
-              inlineMath: [['$', '$'], ['\\(', '\\)']],
-              processEscapes: true
-          },
-          "HTML-CSS": {
-              linebreaks: {
-                  automatic: true
-              },
-              scale: 85
-          },
-          SVG: {
-              linebreaks: {
-                  automatic: true
-              }
-          }
-      });
-    </script>
-  </head>
-  <body>
-    <h1>Project Milestone</h1>
+</head>
+<body>
+    <h1 class="underline">Project Milestone Report</h1>
+    <p>Date: <em>Today's Date</em></p>
+    <p>Authors: Ethan Meitz and Nick Hattrup<br>CMU 15-618 Fall 2023</p>
 
-    <section>
-      <h2>Summary</h2>
-      <p>
-        We will implement the Particle-Particle Particle-Mesh method for
-        calculating the Coulombic interactions in a system of charged particles
-        using CUDA.jl. We will verify our implementation is correct by comparing
-        to a direct sum on the CPU and benchmark performance by comparing to MPI
-        implementations in open source molecular dynamics codes (e.g.
-        LAMMPS/HOOMD). Time permitting, we will employ CUDA aware MPI.
-      </p>
-    </section>
+    <hr>
 
-    <section>
-      <h2>Background</h2>
-      <p>
-        We are implementing a parallel algorithm for calculating long range
-        interactions in molecular dynamics (MD) simulations. In MD many
-        interatomic potentials decay rapidly with separation distance and allows
-        the programmer to ignore interactions between far-apart particles when
-        calculating energies and forces. This approximation cannot be made for
-        Coulombic or gravitational interactions where the energy goes as 1/r.
-        Summing interactions of this form result in a conditionally convergent
-        sum that requires interactions over all distances to be taken into
-        account. To reduce computational cost, researchers developed several
-        methods such as Ewald sums and the fast multipole method; however, we
-        will focus on the most performant and commonly used method the
-        particle-particle particle-mesh method (P3M). In the P3M algorithm, the
-        energies and forces are split into short and long range components:
-      </p>
-      <div id="equation">
-        \[E_{\text{tot}} = E_{\text{sr}} + E_{\text{lr}}\]
-      </div>
-      <p>
-        the short range component is calculated via the particle-particle
-        approach and the long range component is calculated via the
-        particle-mesh approach. In the particle-particle approach, interactions
-        are summed through a traditional force loop that makes use of neighbor
-        lists and scales linearly with the system size. The particle-mesh
-        approach projects the discrete charges onto a mesh which is interpolated
-        via B-splines. The resulting charge field is converted into the Fourier
-        domain where the sum converges rapidly.
-      </p>
-      <p>
-        This code can naturally be parallelized because the force/energy
-        summation for an individual particle is (nearly) independent from all
-        other particles. Furthermore, the FFT used in the particle-mesh approach
-        is readily parallelized over grid points. This problem can also be
-        decomposed spatially like in HW3 and HW4 where we would then use CUDA
-        aware MPI to break the problem down even more. We will follow the steps
-        below to implement P3M in parallel on a GPU(s):
-      </p>
+    <h2>Project Schedule</h2>
+    <p>[Content from projupdate.tex]</p>
 
-      <ol>
-        <li>
-          Decompose domain into equal cubes, assume that number of GPUs is a
-          perfect cube.
-        </li>
-        <li>Move particle positions, charges and neighbor lists to GPU.</li>
-        <li>
-          Calculate which particles should be communicated to other processes.
-          Send those particles. This assumes GPU's have direct connection and
-          would not have to go through CPU. If GPU's are not connected it would
-          be better to do this on the CPU.
-        </li>
-        <li>Launch Particle-Mesh GPU Kernel into GPU Stream 1</li>
-        <ol>
-          <li>
-            Calculate B-spline interpolation of discrete charge onto continuous
-            mesh
-          </li>
-          <li>FFT of mesh</li>
-          <li>Calculate long range energies</li>
-        </ol>
-        <li>
-          Launch Particle-Particle component into GPU Stream 2. This component
-          could be calculated on the CPU while the mesh component is calculated;
-          however, that would be unfaithful to how MD is actually implemented
-          where there are other short-range forces (Van der Waals, bonds etc.)
-          to be calculated on the CPU. To keep our code comparable to LAMMPS we
-          will run this on the GPU.
-        </li>
-        <ol>
-          <li>
-            Loop over neighbors to calculate short range component of energy.
-            Similar to HW3 and HW4.
-          </li>
-        </ol>
-        <li>
-          Reduce short range and long range components on GPU, then send data
-          back to CPU for position/velocity update.
-        </li>
-        <li>Repeat 2-6 every timestep.</li>
-      </ol>
-    </section>
+    <h2>Results to Date</h2>
+    <p>[Content from results.tex]</p>
 
-    <section>
-      <h2>The Challenge</h2>
-      <p>
-        We have identified five major challenges when implementing P3M on
-        GPU(s):
-      </p>
-      <ol>
-        <li>
-          Particles will not necessarily interact with the particles adjacent to
-          them in memory leading to uncoalesced memory access and poor GPU
-          performance.
-        </li>
-        <li>
-          Communication will be negligible in the one GPU case as most of the
-          calculation can be done on the GPU and the results sent back to the
-          CPU. With MPI we will implement a scheme similar to HW4 but in 3D and
-          with periodic boundary conditions. This will result in some
-          communication but we can hide it with computation.
-        </li>
-        <li>
-          The particle-particle method will likely be much more efficient than
-          the particle-mesh and could result in load-balancing issues.
-        </li>
-        <li>
-          Re-implementing neighbor lists to match the memory requirements of GPU
-          code (e.g. coalesced access). The tree format from HW3 and HW4 is not
-          amenable to this, at least not without modifications.
-        </li>
-        <li>
-          Incorporating CUDA libraries to enhance performance, specifically
-          cuFFT, but thrust could also be useful.
-        </li>
-      </ol>
+    <h2>Progress and Final Deliverables</h2>
+    <p>[Content from process.tex]</p>
 
-      <p>
-        By overcoming these challenges we hope to learn CUDA aware MPI, the
-        advantages/disadvantages of using CUDA/MPI in Julia, and how to use the
-        CUDA libraries (specifically cuFFT).
-      </p>
-    </section>
-
-    <section>
-      <h2>Resources</h2>
-      <p>
-        We will be starting from scratch and programming in Julia, making use of
-        their CUDA.jl wrapper. Our code will follow the implementation of P3M as
-        outlined by its original authors Eastwood and Hockney [1]. This
-        implementation only discusses the original P3M method and not how to
-        parallelize the code, to do this we will follow a Master's thesis which
-        implements the similar PME summation on GPU as well as the literature
-        which describes implementing P3M in various MPI MD codes [2,3].
-      </p>
-      <p>
-        To run our code we will make use of our research group's resources (8x
-        NVIDIA 2080 Super GPUs) and potentially the resources of the Perlmutter
-        supercomputer should our code scale well.
-      </p>
-    </section>
-
-    <section>
-      <h2>Goals and Deliverables</h2>
-      <h4>Plan to Achieve</h4>
-      <ol>
-        <li>
-          Reference CPU code to measure naive performance and verify that P3M
-          attains small error. The P3M error is bounded analytically. We will
-          check to verify Float32 GPU calculations do not make our
-          implementation exceed this bound.
-        </li>
-        <li>3D domain decomposition with periodic boundary conditions</li>
-        <li>Single GPU implementation of P3M algorithm</li>
-        <li>
-          Speed of one GPU is 5x faster than an equivalently priced CPU using
-          all cores.
-        </li>
-        <li>
-          GPU utilization is $>$80\% and all parts of the P3M algorithm are done
-          on the GPU (data stays on GPU)
-        </li>
-      </ol>
-      <h4>Hope to Achieve</h4>
-      <ol>
-        <li>CUDA aware MPI implementation for single and multi-node systems</li>
-        <li>
-          Linear weak scaling with number of GPUs (at least up to number of GPUs
-          in one node) with $>$80\% parallel efficiency. Communication is hidden
-          by computation.
-        </li>
-        <li>
-          Recursive bisectioning for domain decomposition to automatically
-          handle load balancing across MPI ranks
-        </li>
-        <li>
-          Investigate potential to use a mixed precision algorithm when
-          calculating energies. The P3M energies are expected to be more
-          accurate than the forces (and are less important in MD anyways). The
-          overall calcluation could be sped up if the energies were calculated
-          with Float16.
-        </li>
-      </ol>
-      
-      <h4>Deliverables</h4>
-      <p>
-        We will create speed-up plots that compare our code to a simple CPU code
-        and report energy/force MSEs to demonstrate correctness and accuracy. To
-        compare performance we will run the exact same simulation in LAMMPS, a
-        production code maintained by Sandia National labs, with MPI and compare
-        the run-time at various system sizes. We will also investigate the weak
-        and strong scaling of our code in comparison to LAMMPS. Through this
-        analysis we hope to understand the benefit and drawbacks of using GPUs
-        in molecular dynamics code. Very few production molecular dynamics codes
-        make full use of GPUs and this report will help us understand and
-        demonstrate the difficulty of mapping atomistic simulation onto a GPU.
-        We also hope to understand the scaling properties of this problem and
-        how it scales as you add more and more GPUs in comparison to the scaling
-        of the CPU only code in LAMMPS.
-      </p>
-    </section>
-
-    <section>
-      <h2>Platform Choice</h2>
-      <p>
-        We have chosen to write our code in Julia to target GPUs. Julia has a
-        rich ecosystem of GPU libraries which wrap their C++ counterparts. For
-        example, the CUDA.jl library provides almost all of the functionality of
-        the CUDA C library but in a higher level language (Julia). Furthermore,
-        Julia offers the KernalAbstarctions.jl library which allows you to
-        target any GPU backend (e.g. Metal, ROCm, CUDA and OneAPI). We will not
-        use KernalAbstractions.jl in this project, but by writing in Julia our
-        project could be easily ported to any GPU backend. We chose to target
-        GPUs because many popular molecular dynamics codes have poor GPU
-        performance and scaling (relative to CPU) despite papers and open source
-        codes demonstrating the superiority of GPUs [4].
-      </p>
-    </section>
-
-    <section>
-      <h2>Schedule</h2>
-      <p>
-        This is our rough schedule. We will only attempt to adapt the code to
-        multiple GPUs once our original code is ported to a single GPU. This may
-        not be completed and is a lofty goal, but something that would be useful
-        if we can figure it out. Should the multi-GPU approach fail, we might
-        try and use the KernalAbstractions framework to target arbitrary GPU
-        backends. We will update the schedule if we make this decision.
-      </p>
-
-      <ul>
-        <li>11/13 Implement P3M in serial on CPU (reference code)</li>
-        <li>11/20 Convert serial code to GPU code, benchmark against LAMMPS</li>
-        <li>11/27: Adapt code to use multiple GPUs, Write project milestone</li>
-        <li>12/4 Continue MPI work, start working on poster</li>
-        <li>12/11 Submit final project report</li>
-      </ul>
-    </section>
-
-    <section>
-      <h2>References</h2>
-      <ol>
-        <li>
-          R.W. Hockney and J.W. Eastwood. Computer simulation using particles.
-          1988.
-        </li>
-        <li>
-          Iupinov Aleksei. Implementation of the Particle Mesh Ewald method on a
-          GPU. Tech. rep. KTH Royal Institute of Technology, 2016.
-        </li>
-        <li>
-          Philippe P Brieu and August E Evrard. P4M: a parallel version of P3M.
-          Tech. rep. 2000, pp. 163–180.
-        </li>
-        <li>
-          Joshua A. Anderson, Chris D. Lorenz, and A. Travesset. “General
-          purpose molecular dynam- ics simulations fully implemented on graphics
-          processing units”. In: Journal of Computational Physics 227.10 (May
-          2008), pp. 5342–5359. issn: 10902716. doi: 10.1016/j.jcp.2008.01.047.
-          Page 5
-        </li>
-      </ol>
-    </section>
-  </body>
+    <h2>Issues</h2>
+    <p>[Content from issues.tex]</p>
+</body>
 </html>
+
