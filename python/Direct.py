@@ -11,7 +11,7 @@ def direct_sum(r, q, real_lat, r_cut):
     #Calculate number of cells in each direction that could be reached given r_cut
     #* Can be pre-calculated outside of function
     N1, N2, N3 = get_N_cells(real_lat, r_cut)
-    print(f"N-Real [{N1} {N2} {N3}]")
+    # print(f"N-Real [{N1} {N2} {N3}]")
 
     #* Fix this so it interacts with its own mirror particles (just not itself)
     for n1 in range(-N1,N1+1):
@@ -66,7 +66,7 @@ if __name__ == "__main__":
     r_cut_lj = 7.0 #needs to be less then 8 for box size w/ 3 UC
     r_cut_real = 10.0 #does this need to be less than L/2????
 
-    dump_path = os.path.join(r"../test_data\salt_sim\dump.atom")
+    dump_path = os.path.join(r"../test_data/salt_sim/dump.atom")
 
     lattice_param = 5.62 #Angstroms
     N_uc = 3
@@ -75,7 +75,7 @@ if __name__ == "__main__":
     #positions are (Nx3) masses, charges (Nx1), boxsize (3x1)
     N_steps = 11
     positions, forces_lmp, eng_lmp, masses, charges, box_sizes = load_system(dump_path, N_steps)
-    for i in range(2):
+    for i in range(N_steps):
         print(f"ON LOOP ITERATION {i}")
         U_LJ, F_LJ = lj_energy_loop(positions[:,:,i], charges, box_sizes, r_cut_lj)
 

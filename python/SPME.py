@@ -321,7 +321,7 @@ if __name__ == "__main__":
         # i_inds, j_inds, _ = cl.neighborlist(positions[:,:,i], r_cut_neighbor, unitcell=np.array([1, 1, 1]))
         U_SPME_total, F_SPME = PME(positions[:,:,i], charges, real_lat_vecs, error_tol, r_cut_real, spline_interp_order)
         # print(f"\t PME Energy Calculated")
-
+        print(f"U_total_PME {U_SPME_total}")
         print(f"U_total {U_SPME_total + np.sum(U_LJ)}")
 
 
