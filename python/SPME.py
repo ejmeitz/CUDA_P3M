@@ -221,12 +221,17 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
     pm_energy, pm_force = particle_mesh(r, q, real_lat_vec, alpha, spline_interp_order, n_mesh)
     self_eng = self_energy(q, alpha)
 
-    # e_charge = 1.60217663e-19 #C
+    # e_charge = scipy.constants.elementary_charge #C
     # k = (1/(4*np.pi*scipy.constants.epsilon_0)) # N-m^2 * C^2
-    # A = e_charge*e_charge*k*1e7 # kJ*Ang
-    # A *= (23.06/(1.60818e-22)) # kcal/mol/Ang #fuck this unit system
+    # A = e_charge*e_charge*k*1e10 # J*Ang
+    # eV_per_J = 1.602176634e-19 #not sure on the accuracy of this
+    # kcal_mol_per_eV = 23.06054194 #not sure on the accuracy of this
+    # kcal_per_joule = 1/4184
+    # Na = 6.02214076e23
+    # A *= kcal_per_joule*Na # kcal/mol/Ang #fuck this unit system
 
-    A = 332.0637128
+    # A = 332.0637128 #from some paper Nick texted
+    A = 332.0637132991921
 
     # print(f"PP Energy: {np.sum(pp_energy*A)}")
     # print(f"PM Energy {pm_energy*A}")
