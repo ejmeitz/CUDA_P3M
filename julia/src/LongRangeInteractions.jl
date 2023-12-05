@@ -5,7 +5,7 @@ using StructArrays
 using TimerOutputs
 using Unitful
 
-using CUDE #this should be conditionally loaded if TargetDevice is a GPU
+using CUDA #this should be conditionally loaded if TargetDevice is a GPU
 
 include("helper.jl")
 include("types.jl")

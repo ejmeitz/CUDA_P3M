@@ -20,7 +20,7 @@ end
 function b(mⱼ,n,Kⱼ)
     m_K = mⱼ/Kⱼ
     num = exp(2*π*1im*(n-1)*m_K)
-    denom = sum([M(k+1, n)*exp(2*π*1im*k*m_K) for k in range(0,n-2)])
+    denom = sum([M(k+1, n)*exp(2*π*1im*k*m_K) for k in 0:n-2])
     return  num/denom 
 end
 
@@ -43,13 +43,13 @@ function calc_BC(sys::System, spme::SPME)
     BC = zeros(Complex64, K1, K2, K3)
     hs = [0.0, 0.0, 0.0]
 
-    for m1 in range(K1)
+    for m1 in 0:K1-1
         hs[1] = (m1 <= (K1/2) ? m1 : m1 - K1)
         B1 = abs2(b(m1,K1,n))
-        for m2 in range(K2)
+        for m2 in 0:K2-1
             hs[2] = ((m2 <= (K2/2)) ? m2 : m2 - K2)
             B2 = B1*abs2(b(m2,K2,n))
-            for m3 in range(K3)
+            for m3 in 0:K3-1
                 hs[3] = ((m3 <= (K3/2)) ? m3 : m3 - K3)
 
                 if m1 == 0 && m2 == 0 && m3 == 0
