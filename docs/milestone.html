@@ -1,37 +1,107 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Project Milestone Report</title>
     <style>
         body {
-            font-family: 'Times New Roman', Times, serif;
-        }
-        h1, h2 {
-            font-weight: bold;
-        }
-        .underline {
-            text-decoration: underline;
-        }
+        font-family: Arial, sans-serif;
+        margin: 10vw;
+      }
+
+      h2 {
+        color: #333;
+      }
+
+      p,
+      ol {
+        color: #333;
+        margin-bottom: 15px;
+      }
+
+      li {
+        margin-bottom: 5px;
+      }
     </style>
+
 </head>
+
 <body>
     <h1 class="underline">Project Milestone Report</h1>
+
     <p>Date: <em>Today's Date</em></p>
     <p>Authors: Ethan Meitz and Nick Hattrup<br>CMU 15-618 Fall 2023</p>
 
     <hr>
 
     <h2>Project Schedule</h2>
-    <p>[Content from projupdate.tex]</p>
+    <p>
+    <ul>
+        <li>To-Date: Implemented Smooth Particle Mesh Ewald, Ewald Sums and a naive implementation in Python. The
+            energies and forces were compared to the same simulation from LAMMPS. Built a Julia package to automatically
+            test GPU implementation against LAMMPS and our Python code.</li>
+        <li>12/4 - 12/6: Implement real-space calculation on a single GPU with neighbor lists (Ethan/Nick).</li>
+        <li>12/7 - 12/9: Implement charge interpolation (Ethan) and reciprocal-space calculation on a single GPU (Nick).
+        </li>
+        <li>12/9 - 12/12: Benchmark and write-up single GPU results (Both), implement domain decomposition (Nick), add
+            halo exchange to real-space kernel to enable multi-GPU calculation (Ethan).</li>
+        <li>12/12-12/14: Benchmark multi-GPU results, finish write-up. Make poster. (Both)</li>
+        <li>12/15: Poster presentation (Both)</li>
+    </ul>
+    </p>
 
     <h2>Results to Date</h2>
-    <p>[Content from results.tex]</p>
+    <p>
+        In our project we are working to implement Coulombic interactions (force and energy) on GPU(s) in Julia. We have
+        completed an implementation of Smooth Particle Mesh Ewald (SPME) in Python as well as traditional Ewald sums and
+        a direct sum with naive for loops. Each of these methods was compared to data from LAMMPS to verify the
+        correctness of our implementation before we port the code onto the GPU. We have not begun implementing code on
+        the GPU as the SPME method took longer than expected to get working; however, it has the best computational
+        complexity of existing methods so we took the extra time to get it working. That said, we identified the three
+        main kernels we will need to port our code to the GPU: The first kernel interpolates point charges onto a mesh
+        grid, the second kernel calculates the real-space energy and force and the final kernel calculates the
+        reciprocal-space energy and force. By implementing the code on CPU first we identified numerous ways to simplify
+        and optimize the code through the use of look-up tables and in-place computation. We also created a Julia
+        package (not public yet), <i>LongRangeInteractions.jl</i>, that allows us to rapidly test and swap between the
+        various methods of calculating Coulombic interactions. This package will also serve as a framework for future
+        work to build from so that our code can be incorporated into molecular dynamics packages in Julia like
+        <i>Molly.jl</i>.
+    </p>
 
     <h2>Progress and Final Deliverables</h2>
-    <p>[Content from process.tex]</p>
+    <p>
+        The serial implementation of Smooth Particle Mesh Ewald proved harder than initially anticipated. The existing
+        resources for this method were severely lacking and we had to re-derive most of the expressions to correctly
+        implement the code. At this point the multi-GPU implementation is a stretch but we will still aim for that as it
+        should not be a huge jump from single GPU to multiple GPUs. That said, there could be immaturity in the Julia
+        ecosystem for CUDA aware MPI that is unforeseen. Our goals for the poster session are now:
+    <ul>
+        <li>Comparison of SPME, Ewald sums and direct sum on CPU to demonstrate the different computational complexity
+            and why parallelization is important for this problem</li>
+        <li>Comparison of the run-time on a single GPU to the LAMMPs MPI implementation with varying number of cores.
+            Aim to find the number of CPU cores equivalent to a single GPU.</li>
+        <li>Comparison of the force/energy error when using the GPU to ensure that Float32 computation does not increase
+            the SPME error.</li>
+        <li>Nice to Have: Weak scaling of our code up to 8 GPUs compared to weak scaling of LAMMPS on CPU.</li>
+    </ul>
+    </p>
+    <p>
+        Our deliverables will be:
+    <ul>
+        <li>A plot of CPU time vs system size for SPME, Ewald and direct sum to show scaling</li>
+        <li>A plot of LAMMPS CPU time vs number of MPI ranks with single line representing our GPU results</li>
+        <li>A plot of expected error vs. actual error with a few different lines for various sets of parameters (e.g.
+            system size, requested accuracy etc.)</li>
+        <li>A publicly available Julia package that can take a set of atomic positions and charges and performs the SPME
+            on GPU.</li>
+        <li>Nice to Have: Weak scaling plots if multi-GPU is successful.</li>
+
+    </ul>
+    </p>
 
     <h2>Issues</h2>
-    <p>[Content from issues.tex]</p>
+    <p>No major issues for single GPU, there could be issues with MPI aware CUDA in Julia but that remains a "nice to
+        have" feature so we will not worry about it for now.</p>
 </body>
-</html>
 
+</html>
