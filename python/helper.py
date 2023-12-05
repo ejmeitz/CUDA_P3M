@@ -76,20 +76,20 @@ def get_N_cells(lattice_vecs, r_cut):
     return n.astype(int)
 
 def vol(lat_vecs):
-    return np.dot(lat_vecs[:,0],np.cross(lat_vecs[:,1], lat_vecs[:,2]))
+    return np.dot(lat_vecs[0,:],np.cross(lat_vecs[1,:], lat_vecs[2,:]))
 
 def reciprocal_vecs(lat_vecs):
     V = vol(lat_vecs)
-    m1 = np.cross(lat_vecs[:,1], lat_vecs[:,2])/V
-    m2 = np.cross(lat_vecs[:,2], lat_vecs[:,0])/V
-    m3 = np.cross(lat_vecs[:,0], lat_vecs[:,1])/V
+    m1 = np.cross(lat_vecs[1,:], lat_vecs[2,:])/V
+    m2 = np.cross(lat_vecs[2,:], lat_vecs[0,:])/V
+    m3 = np.cross(lat_vecs[0,:], lat_vecs[1,:])/V
     return np.array([m1,m2,m3])
 
 def reciprocal_vecs_twopi(lat_vecs):
     V = vol(lat_vecs)
-    m1 = 2*np.pi*np.cross(lat_vecs[:,1], lat_vecs[:,2])/V
-    m2 = 2*np.pi*np.cross(lat_vecs[:,2], lat_vecs[:,0])/V
-    m3 = 2*np.pi*np.cross(lat_vecs[:,0], lat_vecs[:,1])/V
+    m1 = 2*np.pi*np.cross(lat_vecs[1,:], lat_vecs[2,:])/V
+    m2 = 2*np.pi*np.cross(lat_vecs[2,:], lat_vecs[0,:])/V
+    m3 = 2*np.pi*np.cross(lat_vecs[0,:], lat_vecs[1,:])/V
     return np.array([m1,m2,m3])
 
 def nearest_mirror(r_ij,box_sizes):

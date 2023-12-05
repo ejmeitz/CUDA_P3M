@@ -184,7 +184,7 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
     u = np.array([mesh_dims * np.matmul(recip_lat, r[i,:]) for i in range(r.shape[0])])
 
     #Fill Q array (interpolate charge onto grid)
-    Q, dQdr = build_Q(u, spline_interp_order, charges, K1, K2, K3)
+    Q, dQdr = build_Q(u, spline_interp_order, charges, K1, K2, K3, recip_lat)
 
     BC = calc_BC(alpha, V, K1, K2, K3, spline_interp_order, recip_lat)
 
@@ -249,7 +249,8 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
     F_SPME = (pp_force + pm_force)*A
     # This artifact can be avoided by removing the average net force
     # from each atom at each step of the simulation
-
+    print(A*pp_force[0,:])
+    print(A*pm_force[0,:])
     #TODO
     avg_net_force = 0.0 #tf u take the average of?
 

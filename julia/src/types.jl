@@ -1,3 +1,7 @@
+#High-level types, all specific interaction types are in the methods folder
+
+abstract type LongRangeInteraction end
+
 struct Atom{P,M,C}
     position::SVector{3,P} #only support 3D systems for now
     mass::M
@@ -12,14 +16,23 @@ end
 
 struct System{L} #Make <: AbstractSystem{3} in future
     atoms::StructArray{Atom}
-    box_size::SVector{3, L}
+    lattice_vec::Vector{Vector{L}}
 end
 
-function System(atoms, box_size)
+function System(atoms, L)
     total_charge = sum(atoms.charge)
-    @assert  total_charge == 0 "System must be charge neutral, total charge was $(total_charge)"
+    @warn  total_charge == 0 "System must be charge neutral, total charge was $(total_charge)"
 
-    return System{eltype(box_size)}(atoms, box_size)
+    lattice_vec = [[L,0,0],[0,L,0],[0,0,L]]
+
+    return System{typeof(L)}(atoms, lattice_vec)
+end
+
+function System(atoms, lattice_vec::Vector{Vector{L}}) where {L}
+    total_charge = sum(atoms.charge)
+    @warn  total_charge == 0 "System must be charge neutral, total charge was $(total_charge)"
+
+    return System{L}(atoms, lattice_vec)
 end
 
 positions(s::System) = s.atoms.position
@@ -33,7 +46,8 @@ charges(s::System, i::Integer) = s.atoms.charge[i]
 total_charge(s::System) = sum(charges(s))
 
 n_atoms(s::System) = length(s.atoms)
-box_size(s::System) = s.box_size
+lattice_vec(s::System) = s.lattice_vec
+vol(s::System) = vol(lattice_vec(s))
 
 #########################################################
 
@@ -56,30 +70,3 @@ n_proc(::TargetDevice{N}) where {N} = N
 
 ####################################################
 
-abstract type LongRangeInteraction end
-
-
-struct SPME{TD, T, R, B, E} <: LongRangeInteraction
-    sys::System
-    target_device::TD
-    error_tol::T
-    r_cut_dir::R
-    β::B
-    self_energy::E
-    K::SVector{3,Integer}
-end
-
-function SPME(sys, target_device, error_tol, r_cut_dir)
-    β = sqrt(-log(2*error_tol))/r_cut_dir
-    self_energy = -(β/sqrt(π))*sum(x -> x*x, charges(sys))
-    K = ceil.(Int, 2*β*box_size(sys)/(3*(error_tol ^ 0.2)))
-
-    return SPME{typeof(target_device), typeof(error_tol),
-             typeof(r_cut_dir), typeof(β), typeof(self_energy)}(
-                sys, target_device, error_tol, r_cut_dir, β, self_energy, K)
-end
-
-self_energy(spme::SPME) = spme.self_energy
-n_mesh(spme::SPME) = spme.K
-
-####################################################
