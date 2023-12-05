@@ -42,13 +42,16 @@ def particle_particle(r, q, alpha, r_cut, real_lat):
                         if dist_ijn < r_cut:
                             U_direct[i] += q[i] * q[j] * ss.erfc(alpha*dist_ijn) / dist_ijn
 
-                            term1 = (2*dist_ijn*alpha*np.exp((-alpha*alpha*dist_ijn*dist_ijn)) + ss.erfc(alpha*dist_ijn))/(dist_ijn**3)
-                            F_ij = q[i] * q[j] * term1 * r_ijn
+                            # term1 = ((2/np.sqrt(np.pi)) *dist_ijn*alpha*np.exp((-alpha*alpha*dist_ijn*dist_ijn)) + ss.erfc(alpha*dist_ijn))/(dist_ijn**3)
+                            # F_ij = q[i] * q[j] * term1 * r_ijn
 
+                            #Equivalent to ^
+                            F_ij = q[i] * q[j] * ((ss.erfc(alpha*dist_ijn)/(dist_ijn**2)) + (2*alpha*np.exp((-alpha*alpha*dist_ijn*dist_ijn))/(np.sqrt(np.pi)*dist_ijn)))
                             r_hat = r_ijn / dist_ijn 
                             F_ij = F_ij*r_hat
 
                             F_direct[i,:] += F_ij
+                            F_direct[j,:] -= F_ij
 
 
     return 0.5*U_direct, 0.5*F_direct
@@ -249,8 +252,8 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
     F_SPME = (pp_force + pm_force)*A
     # This artifact can be avoided by removing the average net force
     # from each atom at each step of the simulation
-    print(A*pp_force[0,:])
-    print(A*pm_force[0,:])
+    # print(A*pp_force[0,:])
+    # print(A*pm_force[0,:])
     #TODO
     avg_net_force = 0.0 #tf u take the average of?
 
@@ -294,7 +297,7 @@ if __name__ == "__main__":
         # print(f"\t PME Energy Calculated")
         print(f"U_total_PME {U_SPME_total}")
         print(f"U_total {U_SPME_total + np.sum(U_LJ)}")
-        print(f"Force on Atom 0: {F_SPME[0,:]}")
+        print(f"Force on Atom 0: {F_SPME[0,:] + F_LJ[0,:]}")
 
 
     
