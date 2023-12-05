@@ -42,7 +42,8 @@ def particle_particle(r, q, alpha, r_cut, real_lat):
                         if dist_ijn < r_cut:
                             U_direct[i] += q[i] * q[j] * ss.erfc(alpha*dist_ijn) / dist_ijn
 
-                            F_ij = q[i] * q[j] #TODO  #TODO
+                            term1 = (2*dist_ijn*alpha*np.exp((-alpha*alpha*dist_ijn*dist_ijn)) + ss.erfc(alpha*dist_ijn))/(dist_ijn**3)
+                            F_ij = q[i] * q[j] * term1 * r_ijn
 
                             r_hat = r_ijn / dist_ijn 
                             F_ij = F_ij*r_hat
@@ -50,7 +51,7 @@ def particle_particle(r, q, alpha, r_cut, real_lat):
                             F_direct[i,:] += F_ij
 
 
-    return 0.5*U_direct, F_direct
+    return 0.5*U_direct, 0.5*F_direct
 
 #From appendix B
 def M(u, n):
@@ -111,7 +112,7 @@ def calc_BC(alpha, V, K1, K2, K3, n, recip_lat):
     return BC
 
 
-def build_Q(u, n, charges, K1, K2, K3):
+def build_Q(u, n, charges, K1, K2, K3, recip_lat):
     N_atoms = len(charges)
     Q = np.zeros((K1, K2, K3))
     dQdr = np.zeros((N_atoms, 3, K1, K2, K3)) #deriv in real space
@@ -120,7 +121,9 @@ def build_Q(u, n, charges, K1, K2, K3):
         for c0 in range(n+1):
             l0 = np.round(u[i,0]) - c0 # Grid point to interpolate onto
 
-            q_n_0 = charges[i]*M(u[i,0] - l0, n) #if 0 <= u_i0 - l0 <= n will be non-zero
+            M0 = M(u[i,0] - l0, n)
+            q_n_0 = charges[i]*M0 #if 0 <= u_i0 - l0 <= n will be non-zero
+            dM0 = dMdu(u[i,0] - l0,n)
 
             l0 += int(np.ceil(n/2)) # Shift
             if l0 < 0: # Apply PBC
@@ -131,7 +134,9 @@ def build_Q(u, n, charges, K1, K2, K3):
             for c1 in range(n+1):
                 l1 = np.round(u[i,1]) - c1 # Grid point to interpolate onto
 
-                q_n_1 = q_n_0*M(u[i,1] - l1, n) #if 0 <= u_i1 - l1 <= n will be non-zero
+                M1 = M(u[i,1] - l1, n)
+                q_n_1 = q_n_0*M1 #if 0 <= u_i1 - l1 <= n will be non-zero
+                dM1 = dMdu(u[i,1] - l1,n)
 
 
                 l1 += int(np.ceil(n/2)) # Shift
@@ -143,8 +148,9 @@ def build_Q(u, n, charges, K1, K2, K3):
                 for c2 in range(n+1):
                     l2 = np.round(u[i,2]) - c2 # Grid point to interpolate onto
 
-                    q_n_2 = q_n_1*M(u[i,2] - l2, n) #if 0 <= u_i1 - l1 <= n will be non-zero
-
+                    M2 = M(u[i,2] - l2, n)
+                    q_n_2 = q_n_1*M2 #if 0 <= u_i1 - l1 <= n will be non-zero
+                    dM2 = dMdu(u[i,2] - l2,n)
 
                     l2 += int(np.ceil(n/2)) # Shift
                     if l2 < 0: # Apply PBC
@@ -154,9 +160,11 @@ def build_Q(u, n, charges, K1, K2, K3):
 
                     Q[int(l0) ,int(l1), int(l2)] += q_n_2
                     
-                    # dQdr[i, 0, int(l0), int(l1), int(l2)] += 0.0 #TODO
-                    # dQdr[i, 1, int(l0), int(l1), int(l2)] += 0.0
-                    # dQdr[i, 2, int(l0), int(l1), int(l2)] += 0.0
+                    #*Does it matter that l0,l1,l2 is also a function of r_ia
+                    #*This looks like its probably equivalent to some matrix multiply
+                    dQdr[i, 0, int(l0), int(l1), int(l2)] = charges[i]*(K1*recip_lat[0,0]*dM0*M1*M2 + K2*recip_lat[1,0]*dM1*M0*M2 + K3*recip_lat[2,0]*dM2*M0*M1)
+                    dQdr[i, 1, int(l0), int(l1), int(l2)] = charges[i]*(K1*recip_lat[0,1]*dM0*M1*M2 + K2*recip_lat[1,1]*dM1*M0*M2 + K3*recip_lat[2,1]*dM2*M0*M1)
+                    dQdr[i, 2, int(l0), int(l1), int(l2)] = charges[i]*(K1*recip_lat[0,2]*dM0*M1*M2 + K2*recip_lat[1,2]*dM1*M0*M2 + K3*recip_lat[2,2]*dM2*M0*M1)
     return Q, dQdr
 
 
@@ -193,9 +201,9 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
     E_out = 0.5*np.sum(np.real(Q_conv_theta) * np.real(Q))
 
     F_out = np.zeros((N_atoms, 3))
-    # for i in range(N_atoms):
-    #     for dir in range(3):
-            # F_out[i, dir] = -np.sum(dQdr[i,dir,:,:,:] * theta_rec_conv_Q) #do this without allocating
+    for i in range(N_atoms):
+        for dir in range(3):
+            F_out[i, dir] = -np.sum(dQdr[i,dir,:,:,:] * Q_conv_theta) #do this without allocating
  
 
     return E_out, F_out
@@ -230,7 +238,6 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
     # Na = 6.02214076e23
     # A *= kcal_per_joule*Na # kcal/mol/Ang #fuck this unit system
 
-    # A = 332.0637128 #from some paper Nick texted
     A = 332.0637132991921
 
     # print(f"PP Energy: {np.sum(pp_energy*A)}")
@@ -239,7 +246,7 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
     # print(f"Total Ewald Eng {(np.sum(pp_energy) + pm_energy + self_eng)*A}")
 
     U_SPME_total = (np.sum(pp_energy) + pm_energy + self_eng)*A
-    F_SPME = pp_force + pm_force
+    F_SPME = (pp_force + pm_force)*A
     # This artifact can be avoided by removing the average net force
     # from each atom at each step of the simulation
 
@@ -286,7 +293,7 @@ if __name__ == "__main__":
         # print(f"\t PME Energy Calculated")
         print(f"U_total_PME {U_SPME_total}")
         print(f"U_total {U_SPME_total + np.sum(U_LJ)}")
-
+        print(f"Force on Atom 0: {F_SPME[0,:]}")
 
 
     
