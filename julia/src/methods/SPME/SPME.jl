@@ -42,13 +42,14 @@ end
 
 function run(spme::SPME{CPU{N}}) where {N}
     #* Dont implement for this project
+    error("Not Implemented Yet")
 end
 
 
 function run(spme::SPME{SingleGPU})
-
+    error("Not Implemented Yet")
 end
 
 function run(spme::SPME{MultiGPU})
-
+    error("Not Implemented Yet")
 end
