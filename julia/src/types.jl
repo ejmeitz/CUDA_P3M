@@ -37,6 +37,9 @@ end
 
 positions(s::System) = s.atoms.position
 positions(s::System, i::Integer) = s.atoms.position[i]
+positions(s::System, slice::UnitRange{Int}) = view(s.atoms.position, slice, :)
+positions(s::System, slice::UnitRange{Int}, i::Integer) = view(s.atoms.position, slice, i)
+
 
 masses(s::System) = s.atoms.mass
 masses(s::System, i::Integer) = s.atoms.mass[i]

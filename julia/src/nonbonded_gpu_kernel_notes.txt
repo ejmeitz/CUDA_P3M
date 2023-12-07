@@ -1,0 +1,20 @@
+1. Spatiall sort atoms (done every M steps)
+	- Divide space into square voxels of width w, (similar or smaller than r_cut)
+        - Calculate centroid of molecule and assign to voxel (for particles this is trival)
+        - Trace through voxels in a spatially contiguous order and generate new ordering for     		atoms
+2. Tile atoms into blocks of 32
+	- Build bounding boxes around the 32 atoms in each tile O(N)
+3. Figure out which tiles interact with eachother, O(N^2) if done with loops
+	-Nearest distance between boxes is < r_cut + skin distance
+        - Done every Q steps, if Q != 1 you need a skin distance
+4. For each pair of interacting blocks compute distance of bounding box to each atom in the second block. If distance > r_cut set flag for that indicating no interacctions need to be calculated
+5. If less than 12 atoms of 32 in a tile have interactions use the flags:
+	- For each of the 32 threads in a tile, each thread computes the interactions between 		one atom in the first block with all atoms in the second block
+	- This requires a reduction to calculate the force
+6. If more than 12 of the 32 in a tile have interactions do not use the flags:
+	-Compute all interactions, presumably there is way to do this without reduction
+
+
+
+
+- For coulomb force r_cut_real to be <L/2 so we can use normal force loop
