@@ -4,6 +4,7 @@ using LinearAlgebra
 using StructArrays
 using TimerOutputs
 using Unitful
+using BijectiveHilbert 
 
 using CUDA #this should be conditionally loaded if TargetDevice is a GPU
 
