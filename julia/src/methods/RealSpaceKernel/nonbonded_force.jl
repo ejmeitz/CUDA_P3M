@@ -75,6 +75,8 @@ function set_atom_flags!(tnl::TiledNeighborList, sys::System, tile_i, tile_j, r_
     N_atoms = n_atoms(sys)
     lower_idx, upper_idx = get_tile_idx_range(tile_j, N_atoms)
 
+
+    #* THIS SHOULD BE NEAREST MIRROR ATOM PROBABLY
     for (j, atom_j) in enuemrate(eachrow(positions(sys, lower_idx:upper_idx)))
         tnl.atom_flags[tile_i, j] =  (boxPointDistance(tnl.bounding_boxes[tile_i], atom_j) < r_cut)
     end
@@ -104,20 +106,47 @@ function find_interacting_tiles!(tnl::TiledNeighborList, sys::System, r_cut, r_s
 end
 
 
-function full_tile_kernel(sys::System, tnl::TiledNeighborList)
-    #Calculate interaction of atom i with all other 32 atoms in tile j
-    for j in 1:TILE_SIZE
-        F_ij = force()
-        forces[global_atom_idx,:] += F_ij
+function full_tile_kernel(sys::System, tid::Int32, forces::CuArray{Float32, 3})
+     #Start loop in each thread at a different place
+    #* does this cause warp divergence?
+    for j in tid:(tid + WARP_SIZE) #*is THREADIDX.X 1 iNdexed???
+        wrapped_j_idx = (j - 1) & (ATOM_BLOCK_SIZE - 1) #equivalent to modulo when ATOM_BLOCK_SIZE is power of 2
 
-        #how tf u do this without data races??
-        global_j_idx =  
-        forces[local_atom_idx,:] -= F_ij
+        r_ij = 
+        nearest_mirror!(r_ij, )
+        F_ij = force()
+
+        #No race conditions as threads in warp execute in step
+        forces[tile_idx, atom_i_idx, :] += F_ij
+        forces[tile_idx, wrapped_j_idx, :] -= F_ij
     end
 end
 
 function partial_tile_kernel()
+    F_i = 0.0f32
+    #Store forces by pairs and reduce after block executes
+    F_j = CuStaticSharedArray(Float32, (ATOM_BLOCK_SIZE, ATOM_BLOCK_SIZE, 3))
 
+    
+    for j in tile.j_index_range
+        if tnl.atom_flags[tile.i, j]
+            F_ij = force()
+            F_i += F_ij
+            F_j[threadIdx().x, j] -= F_ij #this needs to be reduced across warp at end
+        end
+    end
+
+    #Reduce force's calculated by each thread in warp
+    #*not quite right, probably just do a scan on each row??
+    for i in [16,8,4,2,1] #idk how to write a loop that does this so just hard code for now
+        F_j += shfl_down_sync(-1, F_j, i)
+    end
+
+    #Write piece of force for this tile in global mem
+    forces[tile_idx, atom_i_idx, :] = F_i
+    for j in tile.j_index_range #*move into loop where this got accumulated probably
+        forces[tile_idx, j, :] = 0.0 #& get value from reduced matrix
+    end
 end
 
 function diagonal_tile_kernel()
@@ -161,52 +190,10 @@ function force_kernel(sys::System, tnl::TiledNeighborList, interaction_threshold
     if is_diagonal(tile)
         diagonal_tile_kernel()
     elseif n_interactions <= interaction_threshold
-
-        F_i = 0.0f32
-        #Store forces by pairs and reduce after block executes
-        F_j = CuStaticSharedArray(Float32, (ATOM_BLOCK_SIZE, ATOM_BLOCK_SIZE, 3))
-
-        
-        for j in tile.j_index_range
-            if tnl.atom_flags[tile.i, j]
-                F_ij = force()
-                F_i += F_ij
-                F_j[threadIdx().x, j] -= F_ij #this needs to be reduced across warp at end
-            end
-        end
-
-        #Reduce force's calculated by each thread in warp
-        #*not quite right, probably just do a scan on each row??
-        for i in [16,8,4,2,1] #idk how to write a loop that does this so just hard code for now
-            F_j += shfl_down_sync(-1, F_j, i)
-        end
-
-        #Write piece of force for this tile in global mem
-        forces[tile_idx, atom_i_idx, :] = F_i
-        for j in tile.j_index_range #*move into loop where this got accumulated probably
-            forces[tile_idx, atom_j_idx, :] = 0.0 #& get value from reduced matrix
-        end
-
+        partial_tile_kernel()
     else # calculate all interactions
-        #Start loop in each thread at a different place
-        #* does this cause warp divergence?
-        for j in threadIdx().x:(threadIdx().x + WARP_SIZE)
-            wrapped_j_idx = j&(ATOM_BLOCK_SIZE - 1) #equivalent to modulo when ATOM_BLOCK_SIZE is power of 2
-            F_ij = force()
-
-            #No race conditions as threads in warp execute in step
-            forces[tile_idx, atom_i_idx, :] += F_ij
-            forces[tile_idx, wrapped_j_idx, :] -= F_ij
-        end
+       full_tile_kernel()
     end
-
-    #Accumulate force matrix and write back to global memory
-    if !is_diagonal(tile)
-        for 
-        forces[i] += #*how u know another tile isnt caulcating forces on this atom? 
-        forces[j] -= 
-    end
-
 
     return nothing
 end
