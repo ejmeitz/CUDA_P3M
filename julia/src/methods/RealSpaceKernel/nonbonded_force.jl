@@ -50,20 +50,16 @@ function spatially_sort_atoms!(sys, voxel_assignments)
 
 end
 
-function get_tile_idx_range(tile_idx, N_atoms)
-    lower_idx = (tile_idx - 1)*TILE_SIZE + 1
-    upper_idx = (tile_idx - 1)*TILE_SIZE + TILE_SIZE
-    upper_idx = upper_idx > N_atoms ? N_atoms : upper_idx
-    return lower_idx, upper_idx
-end
 
 function build_bounding_boxes!(tnl::TiledNeighborList, sys::System)
 
     N_atoms = n_atoms(sys)
-    for tile_idx in 1:tnl.n_tiles
-        lower_idx, upper_idx = get_tile_idx_range(tile_idx, N_atoms)
 
-        tnl.bounding_boxes[tile_idx] = BoundingBox(
+
+    for block_idx in 1:tnl.n_blocks
+        lower_idx, upper_idx = get_block_idx_range(block_idx, N_atoms)
+
+        tnl.bounding_boxes[block_idx] = BoundingBox(
             min(positions(sys, lower_idx:upper_idx, 1)), max(positions(sys, lower_idx:upper_idx, 1)),
             min(positions(sys, lower_idx:upper_idx, 2)), max(positions(sys, lower_idx:upper_idx, 2)),
             min(positions(sys, lower_idx:upper_idx, 3)), max(positions(sys, lower_idx:upper_idx, 3))
@@ -75,7 +71,7 @@ function build_bounding_boxes!(tnl::TiledNeighborList, sys::System)
 end
 
 #Checks if atoms in tile_j are within r_cut of bounding box of tile_i
-function set_interaction_flags!(tnl::TiledNeighborList, sys::System, tile_i, tile_j, r_cut)
+function set_atom_flags!(tnl::TiledNeighborList, sys::System, tile_i, tile_j, r_cut)
 
     N_atoms = n_atoms(sys)
     lower_idx, upper_idx = get_tile_idx_range(tile_j, N_atoms)
@@ -87,58 +83,82 @@ function set_interaction_flags!(tnl::TiledNeighborList, sys::System, tile_i, til
     return tnl
 end
 
-"""
-tile_interactions is N_Tiles x N_Tiles upper triangular matrix
-atom_flags is a N_tiles x N_atoms x N_atoms where the last two dims are upper triangular matrix #*this feels like more memory than necessary
-"""
+
 function find_interacting_tiles!(tnl::TiledNeighborList, sys::System, r_cut, r_skin)
 
-    for tile_i in 1:tnl.N_tiles
-        #Set self interaction to true for blocks on diagonal
-        tnl.tile_interactions[tile_i,tile_i] = true
-        lower_idx, upper_idx = get_tile_idx_range(tile_i, N_atoms)
-        tnl.atom_flags[tile_i, lower_idx:upper_idx] .= true
-
-        for tile_j in (i+1):tnl.N_tiles
-            @views tnl.tile_interactions[tile_i, tile_j] = 
-                (boxBoxDistance(bounding_box_dims[tile_i,:], bounding_box_dims[tile_j,:]) < r_cut + r_skin)
-            
-            #If two tile interact
-            if tile_interactions[tile_i,tile_j] == true
-                tnl.atom_flags = set_interaction_flags!(tnl, sys, tile_i, tile_j, r_cut)
-            end
+    for (t,tile) in enumerate(tnl.tiles)
+        if is_diagonal(tile)
+            tnl.tile_interactions[t] = true
+            tnl.atom_flags[t, tile.j_index_range] .= true
         end
-    end
-    
-    return tile_interactions, atom_flags
 
+        tiles_interact = boxBoxDistance(tnl.bounding_boxes[tile.i], bounding_box_dims[tile.j, :]) < r_cut + r_skin
+        tnl.tile_interactions[t] = tiles_interact
+
+        if tiles_interact
+            tnl = set_atom_flags!(tnl, sys, tile_i, tile_j, r_cut)
+        end
+
+    end
+
+    return tnl
 end
 
 
-function full_tile_kernel(sys::System)
+function full_tile_kernel(sys::System, tnl::TiledNeighborList)
+    #Calculate interaction of atom i with all other 32 atoms in tile j
+    for j in 1:TILE_SIZE
+        F_ij = force()
+        forces[global_atom_idx,:] += F_ij
+
+        #how tf u do this without data races??
+        global_j_idx =  
+        forces[local_atom_idx,:] -= F_ij
+    end
+end
+
+function partial_tile_kernel()
+
+end
+
+function diagonal_tile_kernel()
+
+end
+
+# One block fo every pair of interacting tiles
+function force_kernel(sys::System, tnl::TiledNeighborList)
 
     #N_tiles = blockDim().x
 
-    tile_idx = blockIdx().x
-    local_atom_idx = threadIdx().x
-    global_thd_idx = ((tile_idx - 1i32) * blockDim().x) + local_atom_idx
+    tile_i = ceil(Int32, threadIdx().x / TILE_SIZE) + (TILES_PER_BLOCK * (blockIdx().x - 1i32))
+
+    local_atom_idx = 
+
+    global_atom_idx = ((blockIdx().x - 1i32) * blockDim().x) + threadIdx().x
 
     #Each thread loads its own atom data and the 32 atoms it is responble for into SHMEM
-    atom_data_i = CuStaticSharedArray(::Float32, (TILE_SIZE,3))
-    atom_data_j = CuStaticSharedArray(::Float32, (TILE_SIZE,3))
+    atom_data_i = CuStaticSharedArray(Float32, (TILE_SIZE,3))
+    atom_data_j = CuStaticSharedArray(Float32, (TILE_SIZE,3))
 
-    atom_data_i[local_atom_idx] = positions(sys, global_thd_idx)
-
-    for j in 1:TILE_SIZE
-        atom_data_j[j] = positions(sys, ) #* TODO
-    end
+    atom_data_i[local_atom_idx,:] = positions(sys, global_thd_idx)
+    atom_data_j[local_atom_idx,:] = positions(sys, ) #* TODO
 
     __syncthreads()
-    
-    #Calculate interaction with all other 32 atoms in tile j
-    for j in 1:TILE_SIZE
-        
+
+
+    for tile_j in 1:(tile_i-1)
+        lower_idx_j, upper_idx_j = get_tile_idx_range(tile_j, N_atoms)
+        n_interactions = sum(tnl.atom_flags[tile_i, lower_idx_j:upper_idx_j])
+
+        if n_interactions <= interaction_threshold #This is just from OpenMM paper, make a parameter
+            partial_tile_kernel() #__device__ kernel
+        else
+            full_tile_kernel() #__device__ kernel
+        end
     end
+
+    #tile_i == tile_j
+    diagonal_tile_kernel()
 
     return nothing
 end
@@ -160,17 +180,19 @@ function calculate_force!(voxel_assignments, tnl::TiledNeighborList,
     end
 
     #Compute interactions
-    for tile_i in 1:tnl.N_Tiles
+    for tile_idx in 1:length(tnl.tiles)
         
-        for tile_j in range(tile_i, N_tiles)
-            lower_idx_j, upper_idx_j = get_tile_idx_range(tile_j, N_atoms)
-            n_interactions = sum(tnl.atom_flags[tile_i, lower_idx:upper_idx_j])
 
-            if n_interactions <= interaction_threshold #This is just from OpenMM paper, make a parameter
-                partial_tile_kernel() #__device__ kernel
-            else
-                full_tile_kernel() #__device__ kernel
-            end
-        end
+        lower_idx_j, upper_idx_j = get_tile_idx_range(tile_idx.second, N_atoms)
+        n_interactions = sum(tnl.atom_flags[tile_i, lower_idx:upper_idx_j])
+
+
+        # if n_interactions <= interaction_threshold #This is just from OpenMM paper, make a parameter
+        #     partial_tile_kernel() #__device__ kernel
+        # else
+        #     full_tile_kernel() #__device__ kernel
+        # end
+
+        # diagonal_kernel() #__device__ kernel
     end
 end
