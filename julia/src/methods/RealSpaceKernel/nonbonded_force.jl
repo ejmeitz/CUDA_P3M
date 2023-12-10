@@ -19,93 +19,6 @@
 """
 
 
-
-"""
-Assigns atoms into voxels. 
-**ASSUMES ORIGIN IS (0,0,0) and SYSTEM IS CUBIC**
-
-Parameters:
-- voxel_assignments: Nx3 matrix of voxel assignments which are the 3D
-    index of the voxel each atom is inside of in 3D space
-- sys::System: System object,
-- voxel_width: Voxel is cude with side length `voxel_width`
-
-"""
-function assign_atoms_to_voxels!(voxel_assignments::Matrix{Integer}, 
-        sys::System, voxel_width) where T
-    
-    N_atoms = n_atoms(sys)
-    for i in 1:N_atoms
-        voxel_assignments[i,:] .= positions(sys, i) ./ voxel_width
-    end
-    return voxel_assignments
-end
-
-# This only needs to be called once for NVT simulations
-function build_hilbert_mapping(n_voxels_per_dim)
-
-end
-
-function spatially_sort_atoms!(sys, voxel_assignments)
-
-end
-
-
-function build_bounding_boxes!(tnl::TiledNeighborList, sys::System)
-
-    N_atoms = n_atoms(sys)
-
-    for block_idx in 1:tnl.n_blocks
-        lower_idx, upper_idx = get_block_idx_range(block_idx, N_atoms)
-
-        tnl.bounding_boxes[block_idx] = BoundingBox(
-            min(positions(sys, lower_idx:upper_idx, 1)), max(positions(sys, lower_idx:upper_idx, 1)),
-            min(positions(sys, lower_idx:upper_idx, 2)), max(positions(sys, lower_idx:upper_idx, 2)),
-            min(positions(sys, lower_idx:upper_idx, 3)), max(positions(sys, lower_idx:upper_idx, 3))
-        )
-    end
-
-    return tnl
-
-end
-
-#Checks if atoms in tile_j are within r_cut of bounding box of tile_i
-function set_atom_flags!(tnl::TiledNeighborList, sys::System, tile_i, tile_j, r_cut)
-
-    N_atoms = n_atoms(sys)
-    lower_idx, upper_idx = get_tile_idx_range(tile_j, N_atoms)
-
-
-    #* THIS SHOULD BE NEAREST MIRROR ATOM PROBABLY
-    for (j, atom_j) in enuemrate(eachrow(positions(sys, lower_idx:upper_idx)))
-        tnl.atom_flags[tile_i, j] =  (boxPointDistance(tnl.bounding_boxes[tile_i], atom_j) < r_cut)
-    end
-
-    return tnl
-end
-
-
-function find_interacting_tiles!(tnl::TiledNeighborList, sys::System, r_cut, r_skin)
-
-    for (t,tile) in enumerate(tnl.tiles)
-        if is_diagonal(tile)
-            tnl.tile_interactions[t] = true
-            tnl.atom_flags[t, tile.j_index_range] .= true
-        end
-
-        tiles_interact = boxBoxDistance(tnl.bounding_boxes[tile.i], bounding_box_dims[tile.j, :]) < r_cut + r_skin
-        tnl.tile_interactions[t] = tiles_interact
-
-        if tiles_interact
-            tnl = set_atom_flags!(tnl, sys, tile_i, tile_j, r_cut)
-        end
-
-    end
-
-    return tnl
-end
-
-
 function full_tile_kernel(sys::System, tid::Int32, forces::CuArray{Float32, 3})
      #Start loop in each thread at a different place
     #* does this cause warp divergence?
@@ -191,8 +104,8 @@ function force_kernel(sys::System, tnl::TiledNeighborList, interaction_threshold
         diagonal_tile_kernel()
     elseif n_interactions <= interaction_threshold
         partial_tile_kernel()
-    else # calculate all interactions
-       full_tile_kernel()
+    else 
+        full_tile_kernel()
     end
 
     return nothing
