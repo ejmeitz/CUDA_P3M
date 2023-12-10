@@ -1,4 +1,5 @@
 const global WARP_SIZE = 32
+#kernel assumes ATOM_BLOCK_SIZE is a power of 2
 const global ATOM_BLOCK_SIZE = WARP_SIZE #this is not refering to CUDA block size
 const global TILE_SIZE = ATOM_BLOCK_SIZE*ATOM_BLOCK_SIZE
 

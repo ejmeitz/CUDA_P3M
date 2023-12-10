@@ -55,7 +55,6 @@ function build_bounding_boxes!(tnl::TiledNeighborList, sys::System)
 
     N_atoms = n_atoms(sys)
 
-
     for block_idx in 1:tnl.n_blocks
         lower_idx, upper_idx = get_block_idx_range(block_idx, N_atoms)
 
@@ -125,40 +124,89 @@ function diagonal_tile_kernel()
 
 end
 
-# One block fo every pair of interacting tiles
-function force_kernel(sys::System, tnl::TiledNeighborList)
+# Each tile is assigned a warp of threads
+# 1 tile per thread-block --> 1 Warp per block
+    #Could update to have multiple tiles per block
+    #Could be a bit faster since less moves of data from main memory
 
-    #N_tiles = blockDim().x
+function force_kernel(sys::System, tnl::TiledNeighborList, interaction_threshold::Int32)
 
-    tile_i = ceil(Int32, threadIdx().x / TILE_SIZE) + (TILES_PER_BLOCK * (blockIdx().x - 1i32))
+    tile_idx = (blockIdx().x - 1i32)
 
-    local_atom_idx = 
+    tile = tiles[tile_idx]
 
-    global_atom_idx = ((blockIdx().x - 1i32) * blockDim().x) + threadIdx().x
+    #Overall index
+    atom_i_idx = tile.i_index_range.start + threadIdx().x
 
     #Each thread loads its own atom data and the 32 atoms it is responble for into SHMEM
-    atom_data_i = CuStaticSharedArray(Float32, (TILE_SIZE,3))
-    atom_data_j = CuStaticSharedArray(Float32, (TILE_SIZE,3))
+    atom_data_i = CuStaticSharedArray(Float32, (ATOM_BLOCK_SIZE, 3))
+    atom_data_j = CuStaticSharedArray(Float32, (ATOM_BLOCK_SIZE, 3))
 
-    atom_data_i[local_atom_idx,:] = positions(sys, global_thd_idx)
-    atom_data_j[local_atom_idx,:] = positions(sys, ) #* TODO
+
+    atom_data_i[threadIdx().x,:] = positions(sys, atom_i_idx)
+    for j in tile.j_index_range 
+        atom_data_j[threadIdx().x,:] = positions(sys, j) 
+    end
+    
 
     __syncthreads()
 
+    #This is gonna be the same for every thread in a warp
+    #Wasted computation?
+    n_interactions = 0
+    for j in tile.j_index_range
+        n_interactions += tnl.atom_flags[tile.i, j]
+    end
 
-    for tile_j in 1:(tile_i-1)
-        lower_idx_j, upper_idx_j = get_tile_idx_range(tile_j, N_atoms)
-        n_interactions = sum(tnl.atom_flags[tile_i, lower_idx_j:upper_idx_j])
+    if is_diagonal(tile)
+        diagonal_tile_kernel()
+    elseif n_interactions <= interaction_threshold
 
-        if n_interactions <= interaction_threshold #This is just from OpenMM paper, make a parameter
-            partial_tile_kernel() #__device__ kernel
-        else
-            full_tile_kernel() #__device__ kernel
+        F_i = 0.0f32
+        #Store forces by pairs and reduce after block executes
+        F_j = CuStaticSharedArray(Float32, (ATOM_BLOCK_SIZE, ATOM_BLOCK_SIZE, 3))
+
+        
+        for j in tile.j_index_range
+            if tnl.atom_flags[tile.i, j]
+                F_ij = force()
+                F_i += F_ij
+                F_j[threadIdx().x, j] -= F_ij #this needs to be reduced across warp at end
+            end
+        end
+
+        #Reduce force's calculated by each thread in warp
+        #*not quite right, probably just do a scan on each row??
+        for i in [16,8,4,2,1] #idk how to write a loop that does this so just hard code for now
+            F_j += shfl_down_sync(-1, F_j, i)
+        end
+
+        #Write piece of force for this tile in global mem
+        forces[tile_idx, atom_i_idx, :] = F_i
+        for j in tile.j_index_range #*move into loop where this got accumulated probably
+            forces[tile_idx, atom_j_idx, :] = 0.0 #& get value from reduced matrix
+        end
+
+    else # calculate all interactions
+        #Start loop in each thread at a different place
+        #* does this cause warp divergence?
+        for j in threadIdx().x:(threadIdx().x + WARP_SIZE)
+            wrapped_j_idx = j&(ATOM_BLOCK_SIZE - 1) #equivalent to modulo when ATOM_BLOCK_SIZE is power of 2
+            F_ij = force()
+
+            #No race conditions as threads in warp execute in step
+            forces[tile_idx, atom_i_idx, :] += F_ij
+            forces[tile_idx, wrapped_j_idx, :] -= F_ij
         end
     end
 
-    #tile_i == tile_j
-    diagonal_tile_kernel()
+    #Accumulate force matrix and write back to global memory
+    if !is_diagonal(tile)
+        for 
+        forces[i] += #*how u know another tile isnt caulcating forces on this atom? 
+        forces[j] -= 
+    end
+
 
     return nothing
 end
@@ -179,20 +227,6 @@ function calculate_force!(voxel_assignments, tnl::TiledNeighborList,
         tnl = find_interacting_tiles!(tnl, sys, r_cut, r_skin)
     end
 
-    #Compute interactions
-    for tile_idx in 1:length(tnl.tiles)
-        
-
-        lower_idx_j, upper_idx_j = get_tile_idx_range(tile_idx.second, N_atoms)
-        n_interactions = sum(tnl.atom_flags[tile_i, lower_idx:upper_idx_j])
-
-
-        # if n_interactions <= interaction_threshold #This is just from OpenMM paper, make a parameter
-        #     partial_tile_kernel() #__device__ kernel
-        # else
-        #     full_tile_kernel() #__device__ kernel
-        # end
-
-        # diagonal_kernel() #__device__ kernel
-    end
+    #Launch CUDA kernel #TODO
+    @cuda force_kernel()
 end
