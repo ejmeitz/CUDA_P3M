@@ -101,8 +101,51 @@ function assign_atoms_to_voxels!(voxel_assignments::Matrix{Integer},
 end
 
 # This only needs to be called once for NVT simulations
-function build_hilbert_mapping(n_voxels_per_dim)
+# Also assumes origin is (0,0,0)
+function build_hilbert_mapping(n_voxels_per_dim::Vector)
 
+    # Mostly from https://bertvandenbroucke.netlify.app/2019/01/18/space-filling-curves/
+
+    #Number of bits needed per dimension to represent voxels on Hilbert curve
+    N_b = ceil.(Int, log2.(n_voxels_per_dim))
+    println(N_b)
+    #Map voxel centers to integers
+    hilbert_mappings = zeros(Int, n_voxels_per_dim...)
+
+    for i in 1:n_voxels_per_dim[1]
+        for j in 1:n_voxels_per_dim[2]
+            for k in 1:n_voxels_per_dim[3]
+                #Map voxel index into discretized space
+                hilbert_mappings[i,j,k] = 
+                    encode_hilbert(Compact(Int,N_b), [floor(Int64, ((i-1)/n_voxels_per_dim[1])*(2^N_b[1])) + 1,
+                                                      floor(Int64, ((j-1)/n_voxels_per_dim[2])*(2^N_b[2])) + 1,
+                                                      floor(Int64, ((k-1)/n_voxels_per_dim[3])*(2^N_b[3])) + 1]) #*is floor the right thing to do?
+            end
+        end
+    end
+
+    return hilbert_mappings
+end
+ 
+function build_hilbert_mapping_2D(n_voxels_per_dim::Vector)
+
+    # Mostly from https://bertvandenbroucke.netlify.app/2019/01/18/space-filling-curves/
+
+    #Number of bits needed per dimension to represent voxels on Hilbert curve
+    N_b = ceil.(Int, log2.(n_voxels_per_dim))
+    println(N_b)
+    #Map voxel centers to integers
+    hilbert_mappings = zeros(Int, n_voxels_per_dim...)
+    for i in 1:n_voxels_per_dim[1]
+        for j in 1:n_voxels_per_dim[2]
+                #Map voxel index into discretized space
+                hilbert_mappings[i,j] = 
+                    encode_hilbert(Compact(Int, N_b), [floor(Int64, ((i-1)/n_voxels_per_dim[1])*(2^N_b[1]) + 1),
+                                                      floor(Int64, ((j-1)/n_voxels_per_dim[2])*(2^N_b[2])) + 1]) #*is floor the right thing to do?
+        end
+    end
+
+    return hilbert_mappings
 end
 
 function spatially_sort_atoms!(sys, voxel_assignments)
