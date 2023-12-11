@@ -3,42 +3,42 @@ export Atom, System, SPME, SingleThread, CPU, SingleGPU, MultiGPU
 
 abstract type LongRangeInteraction end
 
-struct Atom{P,M,C}
-    position::SVector{3,P} #only support 3D systems for now
+struct Atom{M,C}
     mass::M
     charge::C
     index::Int
 end
 
-function Atom(position, mass, index, charge = 0.0u"q")
-    return Atom{eltype(position), typeof(mass), typeof(charge)}(
-        position, mass, charge, index
+function Atom(mass, index, charge = 0.0u"q")
+    return Atom{typeof(mass), typeof(charge)}(
+        mass, charge, index
     )
 end
 
-struct System{L} #Make <: AbstractSystem{3} in future
+struct System{P,L} #Make <: AbstractSystem{3} in future
     atoms::StructArray{Atom}
+    positions::Matrix{P}
     lattice_vec::Vector{Vector{L}}
 end
 
-function System(atoms, L)
+function System(atoms, positions, L)
     total_charge = sum(atoms.charge)
-    @warn  total_charge == 0 "System must be charge neutral, total charge was $(total_charge)"
+    @warn  total_charge == 0 "System is not charge neutral, total charge was $(total_charge)"
 
     lattice_vec = [[L,0,0],[0,L,0],[0,0,L]]
 
-    return System{typeof(L)}(atoms, lattice_vec)
+    return System{eltype(positions),typeof(L)}(atoms, positions, lattice_vec)
 end
 
-function System(atoms, lattice_vec::Vector{Vector{L}}) where {L}
+function System(atoms, positions, lattice_vec::Vector{Vector{L}}) where {L}
     total_charge = sum(atoms.charge)
     @warn  total_charge == 0 "System must be charge neutral, total charge was $(total_charge)"
 
-    return System{L}(atoms, lattice_vec)
+    return System{eltype(positions),L}(atoms, positions, lattice_vec)
 end
 
-positions(s::System) = s.atoms.position
-positions(s::System, i::Integer) = s.atoms.position[i]
+positions(s::System) = s.positions
+positions(s::System, i::Integer) = view(s.positions,i,:)
 positions(s::System, slice::UnitRange{Int}) = view(s.atoms.position, slice, :)
 positions(s::System, slice::UnitRange{Int}, i::Integer) = view(s.atoms.position, slice, i)
 

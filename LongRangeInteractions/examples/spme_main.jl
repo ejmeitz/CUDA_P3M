@@ -1,5 +1,5 @@
 using Pkg
-# using Revise
+using Revise
 Pkg.activate(raw"C:\Users\ejmei\Repositories\CUDA_P3M\LongRangeInteractions")
 using LongRangeInteractions
 using TimerOutputs

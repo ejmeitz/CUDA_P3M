@@ -177,7 +177,7 @@ function calculate_force!(tnl::TiledNeighborList, sys::System, interacting_tiles
     N_tiles_interacting = length(interacting_tiles)
 
     #Launch CUDA kernel #& pre-allocate all these things outside of loop
-    r = CuArray{Float32}(sys.atoms.positions)
+    r = CuArray{Float32}(positions(sys))
     atom_flags = CuArray{Bool}(tnl.atom_flags)
     tile_forces_i_GPU = CUDA.zeros(Float32, (N_tiles_interacting, WARP_SIZE, 3))
     tile_forces_j_GPU = CUDA.zeros(Float32, (N_tiles_interacting, WARP_SIZE, 3))
