@@ -93,13 +93,14 @@ Parameters
 function TiledNeighborList(voxel_width, N_atoms)
     N_blocks = ceil(Int, N_atoms / ATOM_BLOCK_SIZE)
     # Interactions between block_i and atoms
-    atom_flags = Matrix{Bool}(undef, (N_blocks, N_atoms))
+
     bounding_boxes = Vector{BoundingBox}(undef, (N_blocks,))
     voxel_assignments = zeros(N_atoms, 3)
 
     #Calcualte number of tiles on or above diagonal
     N_unique_tiles = Int64(0.5*N_blocks*(N_blocks + 1))
     tile_interactions = Vector{Bool}(undef, (N_unique_tiles,))
+    atom_flags = Matrix{Bool}(undef, (N_unique_tiles, N_atoms))
 
     #Pre-calcualte tile index ranges
     tiles = Vector{Tile}(undef, (N_unique_tiles,))

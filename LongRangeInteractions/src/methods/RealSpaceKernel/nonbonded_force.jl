@@ -116,7 +116,7 @@ end
 
 # Each tile is assigned a warp of threads
 # 1 tile per thread-block --> 1 Warp per block
-function force_kernel(tile_forces_i::CuArray{Float32, 3}, tile_forces_j::CuArray{Float32, 3},
+function force_kernel!(tile_forces_i::CuArray{Float32, 3}, tile_forces_j::CuArray{Float32, 3},
      tile_energies_i::CuArray{Float32,2}, r::CuArray{Float32, 2}, 
     atom_flags::CuArray{Bool, 2}, potential::Function, interaction_threshold::Int32)
 
