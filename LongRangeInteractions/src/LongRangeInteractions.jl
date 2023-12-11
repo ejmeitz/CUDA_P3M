@@ -9,6 +9,7 @@ using BijectiveHilbert
 # using Adapt
 
 using CUDA #this should be conditionally loaded if TargetDevice is a GPU
+import CUDA: i32
 
 include("helper.jl")
 include("types.jl")

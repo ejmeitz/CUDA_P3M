@@ -18,7 +18,7 @@ const timer = TimerOutput()
 logger_output = joinpath(@__DIR__, "logs")
 
 #In salt_sim_simple σ and ϵ are same for all interactions
-ϵ = 0.1; σ = 3.492
+const ϵ = 0.1; const σ = 3.492
 potential = (r) -> LJ(r, ϵ, σ)
 L = 16.86
 r_cut_lj = 7.0
@@ -38,15 +38,15 @@ sys = System(atoms, positions, L)
 
 #Build neighbor list
 voxel_width = get_optimal_voxel_width(r_cut_lj, [L,L,L])
-tnl = TiledNeighborList(voxel_width, n_atoms(sys))
+tnl = TiledNeighborList(voxel_width, n_atoms(sys));
 interacting_tiles = Tile[]
-forces = zeros(Float32, n_atoms(sys), 3)
-energies = zeros(Float32, n_atoms(sys), 3)
+forces = zeros(Float32, n_atoms(sys), 3);
+energies = zeros(Float32, n_atoms(sys), 3);
 
 # #Run SPME on system
 i = 1
 @timeit timer "SPME Loop $(i)" calculate_force!(tnl, sys, interacting_tiles,
-    potential, forces, energies, r_cut_lj, r_skin, true, true)
+    potential, forces, energies, [L,L,L], r_cut_lj, r_skin, true, true)
         
 # end
 

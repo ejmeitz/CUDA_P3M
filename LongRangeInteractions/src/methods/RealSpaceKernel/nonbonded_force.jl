@@ -116,9 +116,8 @@ end
 
 # Each tile is assigned a warp of threads
 # 1 tile per thread-block --> 1 Warp per block
-function force_kernel!(tile_forces_i::CuArray{Float32, 3}, tile_forces_j::CuArray{Float32, 3},
-     tile_energies_i::CuArray{Float32,2}, r::CuArray{Float32, 2}, 
-    atom_flags::CuArray{Bool, 2}, potential::Function, interaction_threshold::Int32)
+function force_kernel!(tile_forces_i, tile_forces_j, tile_energies_i, tiles, 
+    r, box_sizes, atom_flags, potential::Function, interaction_threshold::Int32)
 
     tile_idx = (blockIdx().x - 1i32)
 
@@ -139,7 +138,7 @@ function force_kernel!(tile_forces_i::CuArray{Float32, 3}, tile_forces_j::CuArra
         atom_data_j[threadIdx().x,:] = r[j] 
     end
 
-    __syncthreads()
+    sync_threads()
 
     #This is gonna be the same for every thread in a warp
     #Wasted computation? could compute outside the kernel
@@ -163,8 +162,9 @@ function force_kernel!(tile_forces_i::CuArray{Float32, 3}, tile_forces_j::CuArra
 
 end
 
+#box_sizes assumes rectangular box
 function calculate_force!(tnl::TiledNeighborList, sys::System, interacting_tiles::Vector{Tile},
-     potential::Function, forces::Matrix, energies::Matrix, r_cut, r_skin, sort_atoms::Bool,
+     potential::Function, forces::Matrix, energies::Matrix, box_sizes, r_cut, r_skin, sort_atoms::Bool,
       check_box_interactions::Bool; interaction_threshold = Int32(12))
 
     if sort_atoms
@@ -182,14 +182,15 @@ function calculate_force!(tnl::TiledNeighborList, sys::System, interacting_tiles
     #Launch CUDA kernel #& pre-allocate all these things outside of loop
     r = CuArray{Float32}(positions(sys))
     atom_flags = CuArray{Bool}(tnl.atom_flags)
+    tiles = CuArray{Tile}(tnl.tiles)
     tile_forces_i_GPU = CUDA.zeros(Float32, (N_tiles_interacting, WARP_SIZE, 3))
     tile_forces_j_GPU = CUDA.zeros(Float32, (N_tiles_interacting, WARP_SIZE, 3))
     tile_energies_i_GPU = CUDA.zeros(Float32, (N_tiles_interacting, WARP_SIZE))
+    print(size(tile_energies_i_GPU))
 
     threads_per_block = WARP_SIZE
-    @cuda threads=threads_per_block blocks=N_tiles_interacting force_kernel!(
-        tile_forces_i_GPU, tile_forces_j_GPU, tile_energies_i_GPU,
-             r, atom_flags, potential, interaction_threshold)
+    @cuda threads=threads_per_block blocks=N_tiles_interacting force_kernel!(tile_forces_i_GPU, tile_forces_j_GPU,
+     tile_energies_i_GPU, tiles, r, CuArray(box_sizes), atom_flags, potential, interaction_threshold)
 
     #Copy forces and energy back to CPU and reduce
     tile_forces_i_CPU = zeros(Float32, (N_tiles_interacting, WARP_SIZE, 3))
