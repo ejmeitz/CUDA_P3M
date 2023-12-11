@@ -15,15 +15,6 @@ end
 
 is_diagonal(t::Tile) = t.i == t.j
 
-# struct BoundingBox
-#     xmin::Float64
-#     xmax::Float64
-#     ymin::Float64
-#     ymax::Float64
-#     zmin::Float64
-#     zmax::Float64
-# end
-
 struct BoundingBox
     bb_min::NTuple{3,Float64}
     bb_max::NTuple{3,Float64}

@@ -24,8 +24,9 @@ end
 
 function System(atoms, positions, L)
     total_charge = sum(atoms.charge)
-    @warn  total_charge != 0 "System is not charge neutral, total charge was $(total_charge)"
-
+    if total_charge != 0 
+        @warn "System must be charge neutral, total charge was $(total_charge)"
+    end
     lattice_vec = [[L,0,0],[0,L,0],[0,0,L]]
 
     return System{eltype(positions),typeof(L)}(atoms, positions, lattice_vec)
@@ -33,8 +34,9 @@ end
 
 function System(atoms, positions, lattice_vec::Vector{Vector{L}}) where {L}
     total_charge = sum(atoms.charge)
-    @warn  total_charge != 0 "System must be charge neutral, total charge was $(total_charge)"
-
+    if total_charge != 0 
+        @warn "System must be charge neutral, total charge was $(total_charge)"
+    end
     return System{eltype(positions),L}(atoms, positions, lattice_vec)
 end
 

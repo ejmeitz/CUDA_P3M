@@ -44,7 +44,7 @@ forces = zeros(Float32, n_atoms(sys), 3);
 energies = zeros(Float32, n_atoms(sys), 3);
 
 # #Run SPME on system
-i = 1
+i = 1;
 @timeit timer "SPME Loop $(i)" calculate_force!(tnl, sys, interacting_tiles,
     potential, forces, energies, [L,L,L], r_cut_lj, r_skin, true, true)
         
