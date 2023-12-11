@@ -4,40 +4,35 @@ using TimerOutputs
 
 #Initialize System from LAMMPS Data
 trajectory, charges, masses, lammps_coul_energies, lammps_forces_all = load_test_data()
-atoms = 
-sys = System(atoms)
-
-
 
 const timer = TimerOutput()
-
 logger_output = joinpath(@__DIR__, "logs")
 
-
-lammps_errors = []
-bruteforce_errors = []
+ϵ = 0.24037
+σ = 3.4
+potential = (r) -> LJ(r, ϵ, σ)
+L = 16.86
+r_cut = 
+r_skin = 
 
 #Loop through configurations tested in LAMMPS and compare to our implementation
 for (i, positions) in enumerate(eachol(trajectory))
 
     #Stores data so that positions are contiguous in memory etc. 
     atoms = StructArray{Atom}(position=positions, mass=masses, charge=charges)
+    sys = System(atoms, L)
 
-    #Run P3M on system
-    @timeit timer "P3M Loop $(i)" coul_energies, coul_forces = p3m(atoms)
-    log_step(joinpath(logger_output, "P3M_Step$(i)"), coul_energies, coul_forces)
+    #Build neighbor list
+    voxel_width = get_optimal_voxel_width(r_cut, box_sizes)
+    tnl = TiledNeighborList(voxel_width, n_atoms(sys))
+    interacting_tiles = Tiles[]
+    forces = zeros(Float32, n_atoms(sys), 3)
+    energies = zeros(Float32, n_atoms(sys), 3)
 
-    #Run self-coded force/energy loop, should brute force the coulombic term
-    force_noncoul, bf_force_coul, bf_energy_coul = MD_loop(atoms)
-    log_step(joinpath(logger_output, "BruteForce_Step$(i)"), bf_energy_coul, bf_force_coul)
-
-    lammps_forces_coul = lammps_forces_all[:, i] .- force_noncoul
-
-    err_lammps = compare_to_lammps(lammps_forces_coul, lammps_coul_energies[:, i], coul_forces, coul_energies)
-    err_bf = compare_to_bruteforce(bf_force_coul, bf_energy_coul, coul_forces, coul_energies)
-    push!(lammps_errors, err_lammps)
-    push!(bruteforce_errors, err_bf)
-
+    #Run SPME on system
+    @timeit timer "SPME Loop $(i)" calculate_force!(tnl, sys, interacting_tiles,
+        potential, forces, energies, r_cut, r_skin, true, true)
+        
 end
 
 #Save timing data to file

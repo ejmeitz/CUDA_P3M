@@ -13,34 +13,45 @@ end
 
 is_diagonal(t::Tile) = t.i == t.j
 
+# struct BoundingBox
+#     xmin::Float64
+#     xmax::Float64
+#     ymin::Float64
+#     ymax::Float64
+#     zmin::Float64
+#     zmax::Float64
+# end
+
 struct BoundingBox
-    xmin::Float64
-    xmax::Float64
-    ymin::Float64
-    ymax::Float64
-    zmin::Float64
-    zmax::Float64
+    bb_min::NTuple{3,Float64}
+    bb_max::NTuple{3,Float64}
 end
+xmin(bb::BoundingBox) = bb.bb_min[1]
+ymin(bb::BoundingBox) = bb.bb_min[2]
+zmin(bb::BoundingBox) = bb.bb_min[3]
+xmax(bb::BoundingBox) = bb.bb_max[1]
+ymax(bb::BoundingBox) = bb.bb_max[2]
+zmax(bb::BoundingBox) = bb.bb_max[3]
 
 #*remake these without sqrt?
 #Gives 0 distance if pt inside box
 function boxPointDistance(bb::BoundingBox, pt)
-    dx = max(max(bb.xmin - pt[1], pt[1] - bb.xmax), 0.0f);
-    dy = max(max(bb.ymin - pt[2], pt[2] - bb.ymax), 0.0f);
-    dz = max(max(bb.zmin - pt[3], pt[3] - bb.zmax), 0.0f);
+    dx = max(max(xmin(bb) - pt[1], pt[1] - xmax(bb)), 0.0f);
+    dy = max(max(ymin(bb) - pt[2], pt[2] - ymax(bb)), 0.0f);
+    dz = max(max(zmin(bb) - pt[3], pt[3] - zmax(bb)), 0.0f);
     return sqrt(dx * dx + dy * dy + dz * dz);
 end
 
-# Assumes bounding boxes are cubic/rectangular and non-overlapping
-# Need different function is boxes are Triclinic
+# Assumes bounding boxes are cubic/rectangular
+# Gives zero of boxes overlap
+# https://stackoverflow.com/questions/65107289/minimum-distance-between-two-axis-aligned-boxes-in-n-dimensions
 function boxBoxDistance(bb1::BoundingBox, bb2::BoundingBox)
-    # dx = min(abs(bb2.xmin - bb1.xmax), abs(bb1.xmin - bb2.xmax))
-    # dy = min(abs(bb2.ymin - bb1.ymax), abs(bb1.ymin - bb2.ymax))
-    # dz = min(abs(bb2.zmin - bb1.zmax), abs(bb1.zmin - bb2.zmax))
-    # println(dx)
-    # println(dy)
-    # println(dz)
-    # return sqrt(dx * dx + dy * dy + dz * dz);
+    delta1 = bb1.bb_min .- bb2.bb_max
+    delta2 = bb2.bb_min .- bb1.bb_max
+    u = max.(zeros(length(delta1)), delta1)
+    v = max.(zeros(length(delta2)), delta2)
+    dist = norm([u; v])
+    return dist
 end
 
 function get_block_idx_range(idx, N_atoms)
@@ -49,7 +60,6 @@ function get_block_idx_range(idx, N_atoms)
     upper_idx = upper_idx > N_atoms ? N_atoms : upper_idx
     return lower_idx, upper_idx
 end
-
 
 struct TiledNeighborList
     voxel_width::Float64
@@ -70,6 +80,22 @@ end
 #     tiles = Adapt.adapt_structure(to, tnl.tiles)
 #     TiledNeighborList(tnl.voxel_width, tnl.n_blocks, voxel_assignments, atom_flags, tile_interactions, bounding_boxes, tiles)
 # end
+
+function get_optimal_voxel_width(r_cut, box_sizes)
+
+    N_voxels = box_sizes ./ r_cut
+
+    #Round down to nearest power of 2
+    # N_voxels_down = Int(2^(floor(log2(N_voxels))))
+    # voxel_width_down = box_sizes ./ N_voxels_down
+
+    #Round up to nearest power of 2 -- want voxel_width <≈ r_cut
+    N_voxels_up = Int(2^(ceil(log2(N_voxels))))
+    voxel_width_up = box_sizes ./ N_voxels_up
+
+
+    return voxel_width_up
+end
 
 """
 Parameters
@@ -111,15 +137,6 @@ end
 """
 Assigns atoms into voxels. 
 **ASSUMES ORIGIN IS (0,0,0) and SYSTEM IS CUBIC/RECTANGULAR**
-
-Parameters:
-- voxel_assignments: Nx3 matrix of voxel assignments which are the 3D
-    index of the voxel each atom is inside of in 3D space
-- sys::System: System object,
-- voxel_width: Voxel is cude with side length `voxel_width`. 
-    Ideally, this is chosen so that the number of voxels on 
-    each side is a power of 2.
-
 """
 function assign_atoms_to_voxels!(tnl::TiledNeighborList, sys::System)
     
@@ -167,11 +184,14 @@ function build_bounding_boxes!(tnl::TiledNeighborList, sys::System)
     for block_idx in 1:tnl.n_blocks
         lower_idx, upper_idx = get_block_idx_range(block_idx, N_atoms)
 
-        tnl.bounding_boxes[block_idx] = BoundingBox(
-            min(positions(sys, lower_idx:upper_idx, 1)), max(positions(sys, lower_idx:upper_idx, 1)),
-            min(positions(sys, lower_idx:upper_idx, 2)), max(positions(sys, lower_idx:upper_idx, 2)),
-            min(positions(sys, lower_idx:upper_idx, 3)), max(positions(sys, lower_idx:upper_idx, 3))
-        )
+        xmin = min(positions(sys, lower_idx:upper_idx, 1))
+        ymin = min(positions(sys, lower_idx:upper_idx, 2))
+        zmin = min(positions(sys, lower_idx:upper_idx, 3))
+        xmax = max(positions(sys, lower_idx:upper_idx, 1))
+        ymax = max(positions(sys, lower_idx:upper_idx, 2))
+        zmax = max(positions(sys, lower_idx:upper_idx, 3))
+
+        tnl.bounding_boxes[block_idx] = BoundingBox((xmin, ymin, zmin), (xmax, ymax, zmax))
     end
 
     return tnl
@@ -202,6 +222,7 @@ function find_interacting_tiles!(tnl::TiledNeighborList, sys::System, r_cut, r_s
             tnl.atom_flags[t, tile.j_index_range] .= true
         end
 
+        #* THIS SHOULD BE NEAREST MIRROR ATOM PROBABLY
         tiles_interact = boxBoxDistance(tnl.bounding_boxes[tile.i], bounding_box_dims[tile.j, :]) < r_cut + r_skin
         tnl.tile_interactions[t] = tiles_interact
 
