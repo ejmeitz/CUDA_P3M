@@ -121,6 +121,8 @@ function force_kernel(tile_forces_i::CuArray{Float32, 3}, tile_forces_j::CuArray
         n_interactions += atom_flags[tile.i, j]
     end
 
+    #* Still need to check tile_interactions to see if we even bother calculating force
+
     if is_diagonal(tile)
         diagonal_tile_kernel(r, tile.i_index_range.start, tile.j_index_range.start,
             box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, force_function)
