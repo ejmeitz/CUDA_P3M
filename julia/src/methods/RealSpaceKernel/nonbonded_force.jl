@@ -25,7 +25,8 @@ function nearest_mirror!(r_ij, box_sizes)
     r_ij += sign()
 end
 
-function full_tile_kernel(r, i_offset, j_offset, box_sizes, tid::Int32, tile_forces::CuArray{Float32, 3}, force::Function)
+function full_tile_kernel(r, i_offset, j_offset, box_sizes, tid::Int32, 
+    tile_forces_i::CuArray{Float32, 3}, tile_forces_j::CuArray{Float32, 3}, force::Function)
      #Start loop in each thread at a different place
     #* does this cause warp divergence?
     for j in tid:(tid + WARP_SIZE) #*is THREADIDX.X 1 iNdexed???
@@ -36,12 +37,13 @@ function full_tile_kernel(r, i_offset, j_offset, box_sizes, tid::Int32, tile_for
         F_ij = force(r_ij)
 
         #No race conditions as threads in warp execute in step
-        tile_forces[tile_idx, tid, :] += F_ij
-        tile_forces[tile_idx, wrapped_j_idx, :] -= F_ij
+        tile_forces_i[tile_idx, tid, :] += F_ij
+        tile_forces_j[tile_idx, wrapped_j_idx, :] -= F_ij
     end
 end
 
-function partial_tile_kernel(r, box_sizes, tid::Int32, tile_forces::CuArray{Float32, 3}, force::Function)
+function partial_tile_kernel(r, box_sizes, tid::Int32, tile_forces_i::CuArray{Float32, 3},
+         tile_forces_j::CuArray{Float32, 3}, force::Function)
     F_i = 0.0f32
     #Store forces by pairs and reduce after block executes
     F_j = CuStaticSharedArray(Float32, (ATOM_BLOCK_SIZE, ATOM_BLOCK_SIZE, 3))
@@ -65,13 +67,15 @@ function partial_tile_kernel(r, box_sizes, tid::Int32, tile_forces::CuArray{Floa
     end
 
     #Write piece of force for this tile in global mem
-    tile_forces[tile_idx, tid, :] = F_i
+    tile_forces_i[tile_idx, tid, :] = F_i
     for j in tile.j_index_range #*move into loop where this got accumulated probably
-        tile_forces[tile_idx, j, :] = 0.0 #& get value from reduced matrix
+        tile_forces_j[tile_idx, j, :] = 0.0 #& get value from reduced matrix
     end
 end
 
-function diagonal_tile_kernel(r, i_offset, j_offset, box_sizes, tid::Int32, tile_forces::CuArray{Float32, 3}, force::Function)
+function diagonal_tile_kernel(r, i_offset, j_offset, box_sizes, tid::Int32, 
+        tile_forces_i::CuArray{Float32, 3}, tile_forces_j::CuArray{Float32, 3}, force::Function)
+
     for j in tid:(tid + WARP_SIZE) #*is THREADIDX.X 1 iNdexed???
         wrapped_j_idx = (j - 1) & (ATOM_BLOCK_SIZE - 1) #equivalent to modulo when ATOM_BLOCK_SIZE is power of 2
         if wrapped_j_idx < tid #Avoid double counting, causes warp divergence
@@ -80,16 +84,16 @@ function diagonal_tile_kernel(r, i_offset, j_offset, box_sizes, tid::Int32, tile
             F_ij = force(r_ij)
 
             #No race conditions as threads in warp execute in step
-            tile_forces[tile_idx, tid, :] += F_ij
-            tile_forces[tile_idx, wrapped_j_idx, :] -= F_ij
+            tile_forces_i[tile_idx, tid, :] += F_ij
+            tile_forces_j[tile_idx, wrapped_j_idx, :] -= F_ij
         end
     end
 end
 
 # Each tile is assigned a warp of threads
 # 1 tile per thread-block --> 1 Warp per block
-function force_kernel(tile_forces::CuArray{Float32, 3}, r::CuArray{Float32, 2}, atom_flags::CuArray{Bool, 2},
-                            force_function::Function, interaction_threshold::Int32)
+function force_kernel(tile_forces_i::CuArray{Float32, 3}, tile_forces_j::CuArray{Float32, 3}, r::CuArray{Float32, 2},
+    atom_flags::CuArray{Bool, 2}, force_function::Function, interaction_threshold::Int32)
 
     tile_idx = (blockIdx().x - 1i32)
 
@@ -119,12 +123,12 @@ function force_kernel(tile_forces::CuArray{Float32, 3}, r::CuArray{Float32, 2}, 
 
     if is_diagonal(tile)
         diagonal_tile_kernel(r, tile.i_index_range.start, tile.j_index_range.start,
-            box_sizes, threadIdx().x, tile_forces, force_function)
+            box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, force_function)
     elseif n_interactions <= interaction_threshold
-        partial_tile_kernel(r, box_sizes, threadIdx.x, tile_forces, force_function)
+        partial_tile_kernel(r, box_sizes, threadIdx.x, tile_forces_i, tile_forces_j, force_function)
     else 
         full_tile_kernel(r, tile.i_index_range.start, tile.j_index_range.start,
-             box_sizes, threadIdx().x, tile_forces, force_function)
+             box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, force_function)
     end
 
     return tile_forces
@@ -144,19 +148,31 @@ function calculate_force!(tnl::TiledNeighborList, sys::System, force_function::F
         tnl = find_interacting_tiles!(tnl, sys, r_cut, r_skin)
     end
 
-    #Launch CUDA kernel
+    #Launch CUDA kernel #& pre-allocate all these things outside of loop
     r = CuArray{Float32}(sys.atoms.positions)
     atom_flags = CuArray{Bool}(tnl.atom_flags)
-    tile_forces = CUDA.zeros(Float32, (N_tiles, WARP_SIZE, 3))
+    tile_forces_i_GPU = CUDA.zeros(Float32, (N_tiles, WARP_SIZE, 3))
+    tile_forces_j_GPU = CUDA.zeros(Float32, (N_tiles, WARP_SIZE, 3))
     N_tiles = length(tnl.tile_interactions)
+
     threads_per_block = WARP_SIZE
     @cuda threads=threads_per_block blocks=N_tiles tile_forces =
          force_kernel!(tile_forces, r, atom_flags, force_function, interaction_threshold)
 
-    #Reduce force across each tile (still on GPU)
-    #* this isn't right cause the tile indexing is 1D but tiles are upper triangular
-    reduce(+, tile_forces, dims = 1)
+    #Copy forces back to CPU and reduce
+    tile_forces_i_CPU = zeros(Float32, (N_tiles, WARP_SIZE, 3))
+    tile_forces_j_CPU = zeros(Float32, (N_tiles, WARP_SIZE, 3))
+    copyto!(tile_forces_i_CPU, tile_forces_i_GPU)
+    copyto!(tile_forces_j_CPU, tile_forces_j_GPU)
+
+    Threads.@threads for tile_idx in 1:N_tiles
+        forces[tnl.tiles[tile_idx].i_index_range] .+= tile_forces_i_CPU[tile_idx]
+    end
+
+    Threads.@threads for tile_idx in 1:N_tiles
+        forces[tnl.tiles[tile_idx].j_index_range] .+= tile_forces_j_CPU[tile_idx]
+    end
 
 
-    return tnl
+    return tnl, forces
 end
