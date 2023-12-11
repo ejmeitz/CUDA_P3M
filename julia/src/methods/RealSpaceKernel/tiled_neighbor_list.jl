@@ -1,7 +1,7 @@
 const global WARP_SIZE = 32
 #kernel assumes ATOM_BLOCK_SIZE is a power of 2
 const global ATOM_BLOCK_SIZE = WARP_SIZE #this is not refering to CUDA block size
-const global TILE_SIZE = ATOM_BLOCK_SIZE*ATOM_BLOCK_SIZE
+const global INTERACTIONS_PER_TILE = ATOM_BLOCK_SIZE*ATOM_BLOCK_SIZE
 
 #Tile representing interaction between block i and j
 struct Tile
@@ -14,14 +14,15 @@ end
 is_diagonal(t::Tile) = t.i == t.j
 
 struct BoundingBox
-    xmin::FLoat64
-    xmax::FLoat64
-    ymin::FLoat64
-    ymax::FLoat64
-    zmin::FLoat64
-    zmax::FLoat64
+    xmin::Float64
+    xmax::Float64
+    ymin::Float64
+    ymax::Float64
+    zmin::Float64
+    zmax::Float64
 end
 
+#*remake these without sqrt?
 #Gives 0 distance if pt inside box
 function boxPointDistance(bb::BoundingBox, pt)
     dx = max(max(bb.xmin - pt[1], pt[1] - bb.xmax), 0.0f);
@@ -30,13 +31,21 @@ function boxPointDistance(bb::BoundingBox, pt)
     return sqrt(dx * dx + dy * dy + dz * dz);
 end
 
+# Assumes bounding boxes are cubic/rectangular and non-overlapping
+# Need different function is boxes are Triclinic
 function boxBoxDistance(bb1::BoundingBox, bb2::BoundingBox)
-
+    # dx = min(abs(bb2.xmin - bb1.xmax), abs(bb1.xmin - bb2.xmax))
+    # dy = min(abs(bb2.ymin - bb1.ymax), abs(bb1.ymin - bb2.ymax))
+    # dz = min(abs(bb2.zmin - bb1.zmax), abs(bb1.zmin - bb2.zmax))
+    # println(dx)
+    # println(dy)
+    # println(dz)
+    # return sqrt(dx * dx + dy * dy + dz * dz);
 end
 
 function get_block_idx_range(idx, N_atoms)
-    lower_idx = (idx - 1)*TILE_SIZE + 1
-    upper_idx = (idx - 1)*TILE_SIZE + TILE_SIZE
+    lower_idx = (idx - 1)*ATOM_BLOCK_SIZE + 1
+    upper_idx = (idx - 1)*ATOM_BLOCK_SIZE + ATOM_BLOCK_SIZE
     upper_idx = upper_idx > N_atoms ? N_atoms : upper_idx
     return lower_idx, upper_idx
 end
@@ -46,11 +55,22 @@ struct TiledNeighborList
     voxel_width::Float64
     n_blocks::Int
     voxel_assignments::Matrix{Int}
-    atom_flags::Array{Bool, 3}
+    atom_flags::Matrix{Bool}
     tile_interactions::Vector{Bool}
     bounding_boxes::Vector{BoundingBox}
-    tiles::Vector{Tiles}
+    tiles::Vector{Tile}
 end
+
+#Allows this type to be constructed with CUDA.jl
+# function Adapt.adapt_structure(to, tnl::TiledNeighborList)
+#     voxel_assignments = Adapt.adapt_structure(to, tnl.voxel_assignments)
+#     atom_flags = Adapt.adapt_structure(to, tnl.atom_flags)
+#     tile_interactions = Adapt.adapt_structure(to, tnl.tile_interactions)
+#     bounding_boxes = Adapt.adapt_structure(to, tnl.bounding_boxes)
+#     tiles = Adapt.adapt_structure(to, tnl.tiles)
+#     TiledNeighborList(tnl.voxel_width, tnl.n_blocks, voxel_assignments, atom_flags, tile_interactions, bounding_boxes, tiles)
+# end
+
 """
 Parameters
 - voxel_width : The width of the voxel used to sort atoms spatially. It is optimal
@@ -60,7 +80,7 @@ Parameters
 function TiledNeighborList(voxel_width, N_atoms)
     N_blocks = ceil(Int, N_atoms / ATOM_BLOCK_SIZE)
     # Interactions between block_i and atoms
-    atom_flags = Array{Bool,3}(undef, (N_blocks, N_atoms))
+    atom_flags = Matrix{Bool}(undef, (N_blocks, N_atoms))
     bounding_boxes = Vector{BoundingBox}(undef, (N_blocks,))
     voxel_assignments = zeros(N_atoms, 3)
 
