@@ -1,0 +1,122 @@
+LAMMPS (3 Aug 2022)
+OMP_NUM_THREADS environment is not set. Defaulting to 1 thread. (src/comm.cpp:98)
+  using 1 OpenMP thread(s) per MPI task
+Loaded 1 plugins from C:\Users\ejmei\AppData\Local\LAMMPS 64-bit 3Aug2022\plugins
+# LAMMPS input script for NaCl crystal simulation with real units
+
+units real
+dimension 3
+boundary p p p
+
+# Atom definition
+atom_style charge
+read_data salt3UC.positions
+Reading data file ...
+  orthogonal box = (0 0 0) to (16.86 16.86 16.86)
+  1 by 1 by 1 MPI processor grid
+  reading atoms ...
+  216 atoms
+  reading velocities ...
+  216 velocities
+  read_data CPU = 0.010 seconds
+
+# Define groups
+group Na type 1
+108 atoms in group Na
+group Cl type 2
+108 atoms in group Cl
+
+# Set up pair style and coefficients
+pair_style lj/cut/coul/long 7.0 10.0
+kspace_style ewald 1e-5
+
+#THIS IS NOT REAL JUST FOR SIMPLICITY IN PROJECT
+pair_coeff 1 1 0.1 3.492
+pair_coeff 1 2 0.1 3.492
+pair_coeff 2 2 0.1 3.492
+
+
+timestep 2.0
+
+compute 1 all pe/atom
+compute 2 all pair lj/cut/coul/long ecoul
+compute 3 all pair lj/cut/coul/long evdwl
+compute 4 all pe
+variable elong equal elong
+
+
+variable T equal 300
+velocity all create ${T} 31454 dist gaussian mom yes
+velocity all create 300 31454 dist gaussian mom yes
+
+
+# Run simulation
+fix 1 all nve
+dump data all custom 10000 dump.atom id q mass x y z fx fy fz c_1
+dump_modify data format line "%d %.4f %.4f %.9f %.9f %.9f %.9f %.9f %.9f %9f"
+fix eng_print all print 10000 "$(c_2) $(v_elong) $(c_3) $(c_4)" file energy_breakdown.txt
+dump_modify data sort id
+run 100000
+Ewald initialization ...
+  using 12-bit tables for long-range coulomb (src/kspace.cpp:342)
+  G vector (1/distance) = 0.30830185
+  estimated absolute RMS force accuracy = 0.0033218313
+  estimated relative force accuracy = 1.0003596e-05
+  KSpace vectors: actual max1d max3d = 462 6 1098
+                  kxmax kymax kzmax  = 6 6 6
+Generated 0 of 1 mixed pair_coeff terms from geometric mixing rule
+Neighbor list info ...
+  update every 1 steps, delay 10 steps, check yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 12
+  ghost atom cutoff = 12
+  binsize = 6, bins = 3 3 3
+  1 neighbor lists, perpetual/occasional/extra = 1 0 0
+  (1) pair lj/cut/coul/long, perpetual
+      attributes: half, newton on
+      pair build: half/bin/atomonly/newton
+      stencil: half/bin/3d
+      bin: standard
+-9829.5515215678024106 -12473.771959531199172 2330.7804200507216592 -19972.543061048239906
+Per MPI rank memory allocation (min/avg/max) = 15.17 | 15.17 | 15.17 Mbytes
+   Step          Temp          E_pair         E_mol          TotEng         Press     
+         0   300           -19972.543      0             -19780.281      66165.045    
+-9791.0690479474360473 -12469.846289437600717 2388.3999100970991094 -19872.515427287893544
+-9792.7267388312920957 -12470.236191633199269 2387.4156066518380612 -19875.547323812632385
+-9801.3716508119669015 -12470.200497481300772 2402.7685099366044597 -19868.803638356694137
+-9808.1164153935260401 -12470.417320334499891 2404.9865204501611515 -19873.547215277867508
+-9798.8263185265714128 -12470.347532696599956 2394.8281921311436236 -19874.345659092021378
+-9796.4654021784299402 -12469.994616874499116 2395.7664992549498493 -19870.69351979797284
+-9799.5168380363174947 -12470.569036074799442 2392.4389741810759915 -19877.64689993007778
+-9795.0929361888847779 -12469.480876436500694 2389.5741056915621812 -19874.999706933816924
+-9800.6936665486882703 -12470.598377184100173 2393.7323018497781959 -19877.559741883014794
+-9805.2319993452983908 -12470.161108163500103 2402.6826364428247871 -19872.710471065998718
+    100000   147.57877     -19872.71       0             -19778.131      69546.798    
+Loop time of 100.301 on 1 procs for 100000 steps with 216 atoms
+
+Performance: 172.281 ns/day, 0.139 hours/ns, 996.999 timesteps/s
+79.5% CPU use with 1 MPI tasks x 1 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 48.308     | 48.308     | 48.308     |   0.0 | 48.16
+Kspace  | 50.425     | 50.425     | 50.425     |   0.0 | 50.27
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 1.1215     | 1.1215     | 1.1215     |   0.0 |  1.12
+Output  | 0.008466   | 0.008466   | 0.008466   |   0.0 |  0.01
+Modify  | 0.21938    | 0.21938    | 0.21938    |   0.0 |  0.22
+Other   |            | 0.2185     |            |       |  0.22
+
+Nlocal:            216 ave         216 max         216 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:           3159 ave        3159 max        3159 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:          36720 ave       36720 max       36720 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 36720
+Ave neighs/atom = 170
+Neighbor list builds = 0
+Dangerous builds = 0
+Total wall time: 0:01:40

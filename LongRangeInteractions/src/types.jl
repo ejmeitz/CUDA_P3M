@@ -1,4 +1,5 @@
 #High-level types, all specific interaction types are in the methods folder
+export Atom, System, SPME, SingleThread, CPU, SingleGPU, MultiGPU
 
 abstract type LongRangeInteraction end
 

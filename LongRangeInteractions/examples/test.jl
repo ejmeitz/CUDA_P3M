@@ -1,7 +1,5 @@
 
-function load_test_data()
-    test_data_path = joinpath(@__DIR__, "..", "test_data", "dump.atom")
-
+function load_test_data(test_data_path)
     ld = LammpsDump(test_data_path)
     file = open(test_data_path, "r")
 
@@ -22,11 +20,11 @@ function load_test_data()
         parse_next_timestep!(data, ld, file, collect(1:N_cols))
 
         #Makes copies but this isnt in the timed section
-        trajectory[:,i] .= reduce(vcat,data[:,4:6])
-        forces_all[:,i] .= reduce(vcat,data[:,7:9])
+        trajectory[:,i] .= reduce(vcat,data[:,4:6]')
+        forces_all[:,i] .= reduce(vcat,data[:,7:9]')
         coul_energies[:,i] .= data[:,N_cols]
-        masses .= data[:,2]
-        charges .= data[:,3]
+        masses .= data[:,3]
+        charges .= data[:,2]
     end
 
     return trajectory, charges, masses, coul_energies, forces_all

@@ -12,5 +12,6 @@ function particle_mesh(spme::SPME{SingleGPU})
 end
 
 function particle_mesh(spme::SPME{MultiGPU{N}}) where {N}
+    #* Don't implement for this project
     error("Not Implemented Yet")
 end

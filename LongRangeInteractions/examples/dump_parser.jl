@@ -27,7 +27,7 @@ end
 
 Base.length(ld::LammpsDump) = ld.n_samples
 # Base.iterate(ld::LammpsDump, state = 1) = state > length(ld) ? nothing : (parse_timestep!(ld, state), state + 1)
-haskey(ld::LammpsDump, x::String) = x ∈ names(ld.data_storage)
+Base.haskey(ld::LammpsDump, x::String) = x ∈ names(ld.data_storage)
 get_col(ld::LammpsDump, x::String) = getproperty(ld.data_storage, Symbol(x))
 
 function skiplines(path::String, num_lines)
