@@ -1,7 +1,7 @@
 function M(u, n)
     if n > 2
         return (u/(n-1))*M(u,n-1) + ((n-u)/(n-1))*M(u-1,n-1)
-    else if n == 2
+    elseif n == 2
         if u >= 0 && u <= 2
             return 1 - abs(u-1)
         else

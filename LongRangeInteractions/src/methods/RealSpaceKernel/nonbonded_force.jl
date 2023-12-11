@@ -158,10 +158,9 @@ function force_kernel(tile_forces_i::CuArray{Float32, 3}, tile_forces_j::CuArray
              box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, tile_energies_i, potential)
     end
 
-    return tile_forces
 end
 
-function calculate_force!(tnl::TiledNeighborList, sys::System, interacting_tiles::Vector{Tiles},
+function calculate_force!(tnl::TiledNeighborList, sys::System, interacting_tiles::Vector{Tile},
      potential::Function, forces::Vector, energies::Vector, r_cut, r_skin, sort_atoms::Bool,
       check_box_interactions::Bool; interaction_threshold = Int32(12))
 
@@ -185,8 +184,8 @@ function calculate_force!(tnl::TiledNeighborList, sys::System, interacting_tiles
     tile_energies_i_GPU = CUDA.zeros(Float32, (N_tiles_interacting, WARP_SIZE))
 
     threads_per_block = WARP_SIZE
-    @cuda threads=threads_per_block blocks=N_tiles_interacting tile_forces =
-         force_kernel!(tile_forces_i_GPU, tile_forces_j_GPU, tile_energies_i_GPU,
+    @cuda threads=threads_per_block blocks=N_tiles_interacting force_kernel!(
+        tile_forces_i_GPU, tile_forces_j_GPU, tile_energies_i_GPU,
              r, atom_flags, potential, interaction_threshold)
 
     #Copy forces and energy back to CPU and reduce

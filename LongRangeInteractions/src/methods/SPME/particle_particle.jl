@@ -1,4 +1,4 @@
-function particle_mesh(spme::SPME{SingleThread})
+function particle_particle(spme::SPME{SingleThread})
    error("Not Implemented Yet")
 end
 

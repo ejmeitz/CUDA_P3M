@@ -2,10 +2,11 @@ module LongRangeInteractions
 
 using LinearAlgebra
 using StructArrays
+using StaticArrays
 using TimerOutputs
 using Unitful
 using BijectiveHilbert 
-using Adapt
+# using Adapt
 
 using CUDA #this should be conditionally loaded if TargetDevice is a GPU
 
