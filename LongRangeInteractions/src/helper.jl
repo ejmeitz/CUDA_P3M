@@ -1,3 +1,5 @@
+export get_optimal_voxel_width
+
 function get_N_cells(lattice_vecs, r_cut)
     axb = cross(lattice_vecs[:, 1], lattice_vecs[:, 2])
     axb /= norm(axb)
@@ -37,4 +39,21 @@ function reciprocal_vecs_twopi(lat_vecs)
     m2 = 2*π*cross(lat_vecs[3], lat_vecs[1])/V
     m3 = 2*π*cross(lat_vecs[1], lat_vecs[2])/V
     return [m1,m2,m3]
+end
+
+#ASSUMES CUBIC BOX
+function get_optimal_voxel_width(r_cut, box_sizes)
+
+    N_voxels = box_sizes ./ r_cut
+
+    #Round down to nearest power of 2
+    # N_voxels_down = Int(2^(floor(log2(N_voxels))))
+    # voxel_width_down = box_sizes ./ N_voxels_down
+
+    #Round up to nearest power of 2 -- want voxel_width <≈ r_cut
+    N_voxels_up = Int.(2 .^(ceil.(log2.(N_voxels))))
+    voxel_width_up = box_sizes ./ N_voxels_up
+
+
+    return voxel_width_up
 end

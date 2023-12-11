@@ -1,3 +1,4 @@
+export calculate_force!
 """
 1. Spatially sort atoms (done every M steps)
 	- Divide space into square voxels of width w, (similar or smaller than r_cut)
@@ -126,6 +127,8 @@ function force_kernel(tile_forces_i::CuArray{Float32, 3}, tile_forces_j::CuArray
     #Overall index
     atom_i_idx = tile.i_index_range.start + threadIdx().x
 
+    #* avoid out of bounds accesses on last tile or when tid is high... 
+
     #Each thread loads its own atom data and the 32 atoms it is responble for into SHMEM
     atom_data_i = CuStaticSharedArray(Float32, (ATOM_BLOCK_SIZE, 3))
     atom_data_j = CuStaticSharedArray(Float32, (ATOM_BLOCK_SIZE, 3))
@@ -161,7 +164,7 @@ function force_kernel(tile_forces_i::CuArray{Float32, 3}, tile_forces_j::CuArray
 end
 
 function calculate_force!(tnl::TiledNeighborList, sys::System, interacting_tiles::Vector{Tile},
-     potential::Function, forces::Vector, energies::Vector, r_cut, r_skin, sort_atoms::Bool,
+     potential::Function, forces::Matrix, energies::Matrix, r_cut, r_skin, sort_atoms::Bool,
       check_box_interactions::Bool; interaction_threshold = Int32(12))
 
     if sort_atoms

@@ -9,8 +9,8 @@ function load_test_data(test_data_path)
 
     data = zeros(N_atoms, N_cols)
 
-    trajectory = zeros(3*N_atoms, N_samples)
-    forces_all = zeros(3*N_atoms, N_samples)
+    trajectory = zeros(N_atoms, 3, N_samples)
+    forces_all = zeros(N_atoms, 3, N_samples)
     coul_energies = zeros(N_atoms, N_samples)
     charges = zeros(N_atoms)
     masses = zeros(N_atoms)
@@ -20,8 +20,8 @@ function load_test_data(test_data_path)
         parse_next_timestep!(data, ld, file, collect(1:N_cols))
 
         #Makes copies but this isnt in the timed section
-        trajectory[:,i] .= reduce(vcat,data[:,4:6]')
-        forces_all[:,i] .= reduce(vcat,data[:,7:9]')
+        trajectory[:,:,i] .= data[:,4:6]
+        forces_all[:,:,i] .= data[:,7:9]
         coul_energies[:,i] .= data[:,N_cols]
         masses .= data[:,3]
         charges .= data[:,2]

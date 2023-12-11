@@ -1,3 +1,5 @@
+export TiledNeighborList, Tile
+
 const global WARP_SIZE = 32
 #kernel assumes ATOM_BLOCK_SIZE is a power of 2
 const global ATOM_BLOCK_SIZE = WARP_SIZE #this is not refering to CUDA block size
@@ -36,9 +38,9 @@ zmax(bb::BoundingBox) = bb.bb_max[3]
 #*remake these without sqrt?
 #Gives 0 distance if pt inside box
 function boxPointDistance(bb::BoundingBox, pt)
-    dx = max(max(xmin(bb) - pt[1], pt[1] - xmax(bb)), 0.0f);
-    dy = max(max(ymin(bb) - pt[2], pt[2] - ymax(bb)), 0.0f);
-    dz = max(max(zmin(bb) - pt[3], pt[3] - zmax(bb)), 0.0f);
+    dx = max(max(xmin(bb) - pt[1], pt[1] - xmax(bb)), 0.0);
+    dy = max(max(ymin(bb) - pt[2], pt[2] - ymax(bb)), 0.0);
+    dz = max(max(zmin(bb) - pt[3], pt[3] - zmax(bb)), 0.0);
     return sqrt(dx * dx + dy * dy + dz * dz);
 end
 
@@ -62,7 +64,7 @@ function get_block_idx_range(idx, N_atoms)
 end
 
 struct TiledNeighborList
-    voxel_width::Float64
+    voxel_width::Vector{Float64}
     n_blocks::Int
     voxel_assignments::Matrix{Int}
     atom_flags::Matrix{Bool}
@@ -81,21 +83,6 @@ end
 #     TiledNeighborList(tnl.voxel_width, tnl.n_blocks, voxel_assignments, atom_flags, tile_interactions, bounding_boxes, tiles)
 # end
 
-function get_optimal_voxel_width(r_cut, box_sizes)
-
-    N_voxels = box_sizes ./ r_cut
-
-    #Round down to nearest power of 2
-    # N_voxels_down = Int(2^(floor(log2(N_voxels))))
-    # voxel_width_down = box_sizes ./ N_voxels_down
-
-    #Round up to nearest power of 2 -- want voxel_width <≈ r_cut
-    N_voxels_up = Int(2^(ceil(log2(N_voxels))))
-    voxel_width_up = box_sizes ./ N_voxels_up
-
-
-    return voxel_width_up
-end
 
 """
 Parameters
@@ -116,12 +103,14 @@ function TiledNeighborList(voxel_width, N_atoms)
 
     #Pre-calcualte tile index ranges
     tiles = Vector{Tile}(undef, (N_unique_tiles,))
+    idx_1D = 1
     for i in UnitRange{Int32}(1:N_blocks)
-        lower_idx_i, upper_idx_i = get_block_idx_range(i, N_atoms)
+        lower_idx_i, upper_idx_i = Int32.(get_block_idx_range(i, N_atoms))
         for j in UnitRange{Int32}(i:N_blocks)
-            lower_idx_j, upper_idx_j = get_block_idx_range(j, N_atoms)
-            tiles[i] = Tile(i, j, UnitRange{Int32}(lower_idx_i:upper_idx_i),
+            lower_idx_j, upper_idx_j = Int32.(get_block_idx_range(j, N_atoms))
+            tiles[idx_1D] = Tile(i, j, UnitRange{Int32}(lower_idx_i:upper_idx_i),
                  UnitRange{Int32}(lower_idx_j:upper_idx_j))
+            idx_1D += 1
         end
     end
     
@@ -142,7 +131,7 @@ function assign_atoms_to_voxels!(tnl::TiledNeighborList, sys::System)
     
     N_atoms = n_atoms(sys)
     for i in 1:N_atoms
-        tnl.voxel_assignments[i,:] .= floor.(Int, positions(sys, i) ./ tnl.voxel_width) + 1
+        tnl.voxel_assignments[i,:] .= floor.(Int, positions(sys, i) ./ tnl.voxel_width) .+ 1
     end
     return tnl
 end
@@ -160,7 +149,7 @@ function spatially_sort_voxels(n_voxels_per_dim::Vector)
     #Convert to numbers between 0 and 2^(N_bits)
     mapped_indices = [map_index(i,j,k) for i in 1:n_voxels_per_dim[1] for j in 1:n_voxels_per_dim[2] for k in 1:n_voxels_per_dim[3]]
     sorted_idxs = sortperm(mapped_indices, by = x ->  encode_hilbert(Compact(Int, N_bits), x))
-
+ 
     #return unmapped_indices[sorted_idxs]
     return Dict(unmapped_indices[sorted_idx] => sorted_idx for sorted_idx in sorted_idxs)
 end
@@ -171,7 +160,7 @@ function spatially_sort_atoms!(sys::System, tnl::TiledNeighborList)
     tnl = assign_atoms_to_voxels!(tnl, sys)
     voxels_sorted = spatially_sort_voxels(n_voxels_per_dim)
 
-    sort!(sys.atoms, by = atom -> tnl.voxel_assignments[voxels_sorted[atom.index]])
+    sort!(sys.atoms, by = atom -> voxels_sorted[tnl.voxel_assignments[atom.index,:]])
 
     return sys, tnl
 end
@@ -184,12 +173,12 @@ function build_bounding_boxes!(tnl::TiledNeighborList, sys::System)
     for block_idx in 1:tnl.n_blocks
         lower_idx, upper_idx = get_block_idx_range(block_idx, N_atoms)
 
-        xmin = min(positions(sys, lower_idx:upper_idx, 1))
-        ymin = min(positions(sys, lower_idx:upper_idx, 2))
-        zmin = min(positions(sys, lower_idx:upper_idx, 3))
-        xmax = max(positions(sys, lower_idx:upper_idx, 1))
-        ymax = max(positions(sys, lower_idx:upper_idx, 2))
-        zmax = max(positions(sys, lower_idx:upper_idx, 3))
+        xmin = minimum(positions(sys, lower_idx:upper_idx, 1))
+        ymin = minimum(positions(sys, lower_idx:upper_idx, 2))
+        zmin = minimum(positions(sys, lower_idx:upper_idx, 3))
+        xmax = maximum(positions(sys, lower_idx:upper_idx, 1))
+        ymax = maximum(positions(sys, lower_idx:upper_idx, 2))
+        zmax = maximum(positions(sys, lower_idx:upper_idx, 3))
 
         tnl.bounding_boxes[block_idx] = BoundingBox((xmin, ymin, zmin), (xmax, ymax, zmax))
     end
@@ -199,15 +188,11 @@ function build_bounding_boxes!(tnl::TiledNeighborList, sys::System)
 end
 
 #Checks if atoms in tile_j are within r_cut of bounding box of tile_i
-function set_atom_flags!(tnl::TiledNeighborList, sys::System, tile_i, tile_j, r_cut)
-
-    N_atoms = n_atoms(sys)
-    lower_idx, upper_idx = get_tile_idx_range(tile_j, N_atoms)
-
+function set_atom_flags!(tnl::TiledNeighborList, sys::System, tile::Tile, r_cut)
 
     #* THIS SHOULD BE NEAREST MIRROR ATOM PROBABLY
-    for (j, atom_j) in enuemrate(eachrow(positions(sys, lower_idx:upper_idx)))
-        tnl.atom_flags[tile_i, j] =  (boxPointDistance(tnl.bounding_boxes[tile_i], atom_j) < r_cut)
+    for (j, atom_j) in enumerate(eachrow(positions(sys, tile.j_index_range)))
+        tnl.atom_flags[tile.i, j] =  (boxPointDistance(tnl.bounding_boxes[tile.i], atom_j) < r_cut)
     end
 
     return tnl
@@ -223,11 +208,11 @@ function find_interacting_tiles!(tnl::TiledNeighborList, sys::System, r_cut, r_s
         end
 
         #* THIS SHOULD BE NEAREST MIRROR ATOM PROBABLY
-        tiles_interact = boxBoxDistance(tnl.bounding_boxes[tile.i], bounding_box_dims[tile.j, :]) < r_cut + r_skin
+        tiles_interact = boxBoxDistance(tnl.bounding_boxes[tile.i], tnl.bounding_boxes[tile.j]) < r_cut + r_skin
         tnl.tile_interactions[t] = tiles_interact
 
         if tiles_interact
-            tnl = set_atom_flags!(tnl, sys, tile_i, tile_j, r_cut)
+            tnl = set_atom_flags!(tnl, sys, tile, r_cut)
         end
 
     end

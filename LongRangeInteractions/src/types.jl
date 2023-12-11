@@ -1,5 +1,6 @@
 #High-level types, all specific interaction types are in the methods folder
-export Atom, System, SPME, SingleThread, CPU, SingleGPU, MultiGPU
+export Atom, System, SPME, SingleThread, CPU, SingleGPU, MultiGPU,
+    n_atoms, positions
 
 abstract type LongRangeInteraction end
 
@@ -23,7 +24,7 @@ end
 
 function System(atoms, positions, L)
     total_charge = sum(atoms.charge)
-    @warn  total_charge == 0 "System is not charge neutral, total charge was $(total_charge)"
+    @warn  total_charge != 0 "System is not charge neutral, total charge was $(total_charge)"
 
     lattice_vec = [[L,0,0],[0,L,0],[0,0,L]]
 
@@ -32,15 +33,15 @@ end
 
 function System(atoms, positions, lattice_vec::Vector{Vector{L}}) where {L}
     total_charge = sum(atoms.charge)
-    @warn  total_charge == 0 "System must be charge neutral, total charge was $(total_charge)"
+    @warn  total_charge != 0 "System must be charge neutral, total charge was $(total_charge)"
 
     return System{eltype(positions),L}(atoms, positions, lattice_vec)
 end
 
 positions(s::System) = s.positions
 positions(s::System, i::Integer) = view(s.positions,i,:)
-positions(s::System, slice::UnitRange{Int}) = view(s.atoms.position, slice, :)
-positions(s::System, slice::UnitRange{Int}, i::Integer) = view(s.atoms.position, slice, i)
+positions(s::System, slice::UnitRange{<:Integer}) = view(s.positions, slice, :)
+positions(s::System, slice::UnitRange{<:Integer}, i::Integer) = view(s.positions, slice, i)
 
 
 masses(s::System) = s.atoms.mass
