@@ -41,20 +41,28 @@ function get_block_idx_range(idx, N_atoms)
     return lower_idx, upper_idx
 end
 
+
 struct TiledNeighborList
     voxel_width::Float64
     n_blocks::Int
+    voxel_assignments::Matrix{Int}
     atom_flags::Array{Bool, 3}
     tile_interactions::Vector{Bool}
     bounding_boxes::Vector{BoundingBox}
     tiles::Vector{Tiles}
 end
-
+"""
+Parameters
+- voxel_width : The width of the voxel used to sort atoms spatially. It is optimal
+    if the number of voxels in each dimension is a power of 2. Typically, `voxel_width`
+    is less than or the same as the cutoff radius.
+"""
 function TiledNeighborList(voxel_width, N_atoms)
     N_blocks = ceil(Int, N_atoms / ATOM_BLOCK_SIZE)
     # Interactions between block_i and atoms
     atom_flags = Array{Bool,3}(undef, (N_blocks, N_atoms))
     bounding_boxes = Vector{BoundingBox}(undef, (N_blocks,))
+    voxel_assignments = zeros(N_atoms, 3)
 
     #Calcualte number of tiles on or above diagonal
     N_unique_tiles = Int64(0.5*N_blocks*(N_blocks + 1))
@@ -73,7 +81,8 @@ function TiledNeighborList(voxel_width, N_atoms)
     
     tile_interactions = Vector{Bool}(undef, (N_unique_tiles,))
 
-    return TiledNeighborList(voxel_width, N_blocks, atom_flags, tile_interactions, bounding_boxes, tiles)
+    return TiledNeighborList(voxel_width, N_blocks, voxel_assignments,
+                atom_flags, tile_interactions, bounding_boxes, tiles)
 end
 
 
@@ -81,75 +90,53 @@ end
 
 """
 Assigns atoms into voxels. 
-**ASSUMES ORIGIN IS (0,0,0) and SYSTEM IS CUBIC**
+**ASSUMES ORIGIN IS (0,0,0) and SYSTEM IS CUBIC/RECTANGULAR**
 
 Parameters:
 - voxel_assignments: Nx3 matrix of voxel assignments which are the 3D
     index of the voxel each atom is inside of in 3D space
 - sys::System: System object,
-- voxel_width: Voxel is cude with side length `voxel_width`
+- voxel_width: Voxel is cude with side length `voxel_width`. 
+    Ideally, this is chosen so that the number of voxels on 
+    each side is a power of 2.
 
 """
-function assign_atoms_to_voxels!(voxel_assignments::Matrix{Integer}, 
-        sys::System, voxel_width) where T
+function assign_atoms_to_voxels!(tnl::TiledNeighborList, sys::System)
     
     N_atoms = n_atoms(sys)
     for i in 1:N_atoms
-        voxel_assignments[i,:] .= positions(sys, i) ./ voxel_width
+        tnl.voxel_assignments[i,:] .= floor.(Int, positions(sys, i) ./ tnl.voxel_width) + 1
     end
-    return voxel_assignments
+    return tnl
 end
 
 # This only needs to be called once for NVT simulations
 # Also assumes origin is (0,0,0)
-function build_hilbert_mapping(n_voxels_per_dim::Vector)
+function spatially_sort_voxels(n_voxels_per_dim::Vector)
+    N_bits = ceil.(Int, log2.(n_voxels_per_dim))
+    map_index = (i,j,k) -> [floor(Int64, ((i-1)/n_voxels_per_dim[1])*(2^N_bits[1])) + 1,
+                          floor(Int64, ((j-1)/n_voxels_per_dim[2])*(2^N_bits[2])) + 1,
+                          floor(Int64, ((k-1)/n_voxels_per_dim[2])*(2^N_bits[2])) + 1]
 
-    # Mostly from https://bertvandenbroucke.netlify.app/2019/01/18/space-filling-curves/
+    #Integer indices of each voxel
+    unmapped_indices = [[i,j,k] for i in 1:n_voxels_per_dim[1] for j in 1:n_voxels_per_dim[2] for k in 1:n_voxels_per_dim[3]]
+    #Convert to numbers between 0 and 2^(N_bits)
+    mapped_indices = [map_index(i,j,k) for i in 1:n_voxels_per_dim[1] for j in 1:n_voxels_per_dim[2] for k in 1:n_voxels_per_dim[3]]
+    sorted_idxs = sortperm(mapped_indices, by = x ->  encode_hilbert(Compact(Int, N_bits), x))
 
-    #Number of bits needed per dimension to represent voxels on Hilbert curve
-    N_b = ceil.(Int, log2.(n_voxels_per_dim))
-    println(N_b)
-    #Map voxel centers to integers
-    hilbert_mappings = zeros(Int, n_voxels_per_dim...)
-
-    for i in 1:n_voxels_per_dim[1]
-        for j in 1:n_voxels_per_dim[2]
-            for k in 1:n_voxels_per_dim[3]
-                #Map voxel index into discretized space
-                hilbert_mappings[i,j,k] = 
-                    encode_hilbert(Compact(Int,N_b), [floor(Int64, ((i-1)/n_voxels_per_dim[1])*(2^N_b[1])) + 1,
-                                                      floor(Int64, ((j-1)/n_voxels_per_dim[2])*(2^N_b[2])) + 1,
-                                                      floor(Int64, ((k-1)/n_voxels_per_dim[3])*(2^N_b[3])) + 1]) #*is floor the right thing to do?
-            end
-        end
-    end
-
-    return hilbert_mappings
-end
- 
-function build_hilbert_mapping_2D(n_voxels_per_dim::Vector)
-
-    # Mostly from https://bertvandenbroucke.netlify.app/2019/01/18/space-filling-curves/
-
-    #Number of bits needed per dimension to represent voxels on Hilbert curve
-    N_b = ceil.(Int, log2.(n_voxels_per_dim))
-    println(N_b)
-    #Map voxel centers to integers
-    hilbert_mappings = zeros(Int, n_voxels_per_dim...)
-    for i in 1:n_voxels_per_dim[1]
-        for j in 1:n_voxels_per_dim[2]
-                #Map voxel index into discretized space
-                hilbert_mappings[i,j] = 
-                    encode_hilbert(Compact(Int, N_b), [floor(Int64, ((i-1)/n_voxels_per_dim[1])*(2^N_b[1]) + 1),
-                                                      floor(Int64, ((j-1)/n_voxels_per_dim[2])*(2^N_b[2])) + 1]) #*is floor the right thing to do?
-        end
-    end
-
-    return hilbert_mappings
+    #return unmapped_indices[sorted_idxs]
+    return Dict(unmapped_indices[sorted_idx] => sorted_idx for sorted_idx in sorted_idxs)
 end
 
-function spatially_sort_atoms!(sys, voxel_assignments)
+function spatially_sort_atoms!(sys::System, tnl::TiledNeighborList)
 
+    n_voxels_per_dim = ceil.(Int, norm.(sys.lattice_vec) ./ tnl.voxel_width)
+    tnl = assign_atoms_to_voxels!(tnl, sys)
+    voxels_sorted = spatially_sort_voxels(n_voxels_per_dim)
+
+    sort!(sys.atoms, by = atom -> tnl.voxel_assignments[voxels_sorted[atom.index]])
+
+    return sys, tnl
 end
 
 

@@ -6,11 +6,12 @@ struct Atom{P,M,C}
     position::SVector{3,P} #only support 3D systems for now
     mass::M
     charge::C
+    index::Int
 end
 
-function Atom(position, mass, charge = 0.0u"q")
+function Atom(position, mass, index, charge = 0.0u"q")
     return Atom{eltype(position), typeof(mass), typeof(charge)}(
-        position, mass, charge
+        position, mass, charge, index
     )
 end
 
