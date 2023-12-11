@@ -1,0 +1,12 @@
+name = "LongRangeInteractions"
+uuid = "1cbd9a4e-9844-11ee-0a63-e7e50ce0fc9e"
+authors = ["Ethan Meitz <emeitz@andrew.cmu.edu> Nick Hattrup"]
+version = "0.0.1"
+
+[deps]
+BijectiveHilbert = "91e7fc40-53cd-4118-bd19-d7fcd1de2a54"
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+StructArrays = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
+TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
+Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
