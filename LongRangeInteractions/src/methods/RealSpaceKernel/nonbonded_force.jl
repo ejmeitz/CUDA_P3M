@@ -203,7 +203,6 @@ function calculate_force!(tnl::TiledNeighborList, sys::System, interacting_tiles
     println("==============")
 
     #Copy forces and energy back to CPU and reduce
-    #*this breaks shit rn
     # tile_forces_i_CPU = Array(tile_forces_i_GPU)
     # tile_forces_j_CPU = Array(tile_forces_j_GPU)
     # tile_energies_i_CPU = Array(tile_energies_i_GPU)
