@@ -91,6 +91,18 @@ end
     end
 end
 
+# const ϵ = 0.1; const σ = 3.492
+@inline function LJ_potential(r::Float32, ϵ::Float32, σ::Float32)
+    k = (σ/r)^6
+    return 4*ϵ*(k*(k-1))
+end
+
+@inline function LJ_force(r::Float32, ϵ::Float32, σ::Float32)
+    k = (σ/r)^6
+    F = -4*ϵ*(12*(k*k/r) + 6*(k/r))
+    return F
+end
+
 @inline function diagonal_tile_kernel(r, i_offset, j_offset, box_sizes, tid::Int32, 
         tile_forces_i, tile_forces_j, tile_energies_i, potential, r_ij, F_ij)
 
@@ -99,15 +111,18 @@ end
         if wrapped_j_idx < tid #Avoid double counting, causes warp divergence
             r_ij .= r[i_offset + tid] .- r[j_offset + wrapped_j_idx]
             nearest_mirror!(r_ij, box_sizes) #*causes divergence??
-            U_ij, F_mag = potential(r_ij) #*cant return a tuple like this
+            dist_ij = CUDA.norm3df(r_ij[1], r_ij[2], r_ij[3])
+
+            #*figure out how to abstract this
+            U_ij = LJ_potential(dist_ij, 0.1f32, 3.492f32)
+            F_mag = LJ_force(dist_ij, 0.f321, 3.492f32)
 
             # #Convert F to be directional
-            F_ij .= F_mag .* (r_ij .* CUDA.rsqrt(r_ij[1]*r_ij[1] + r_ij[2]*r_ij[2] + r_ij[3]*r_ij[3]))
-            # F_ij .= F_mag.*(r_ij*CUDA.rnorfmf(3,r_ij[1]))#* this is not exposed by CUDA.jl
+            F_ij .= F_mag .* (r_ij ./ dist_ij)
 
             # #No race conditions as threads in warp execute in step
-            # tile_energies_i[blockIdx().x, tid] += U_ij
-            # tile_forces_i[blockIdx().x, tid, :] .+= F_ij
+            tile_energies_i[blockIdx().x, tid] += U_ij
+            tile_forces_i[blockIdx().x, tid, :] .+= F_ij
             # tile_forces_j[blockIdx().x, wrapped_j_idx, :] .-= F_ij
         end
     end
