@@ -130,6 +130,21 @@ function assign_atoms_to_voxels!(tnl::TiledNeighborList, sys::System)
     return tnl
 end
 
+#This for debugging
+function check_voxel_counts(tnl, sys)
+    N_atoms = n_atoms(sys)
+    counts = Dict()
+    for i in 1:N_atoms
+        voxel = tnl.voxel_assignments[i,:]
+        if haskey(counts, voxel)
+            counts[voxel] += 1
+        else
+            counts[voxel] = 1
+        end
+    end
+    return counts
+end
+
 # This only needs to be called once for NVT simulations
 # Also assumes origin is (0,0,0)
 function spatially_sort_voxels(n_voxels_per_dim::Vector)

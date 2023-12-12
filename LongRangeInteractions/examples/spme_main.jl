@@ -38,6 +38,7 @@ sys = System(atoms, positions, L)
 
 #Build neighbor list
 voxel_width = get_optimal_voxel_width(r_cut_lj, [L,L,L])
+voxel_width = [L,L,L]./2 #temp
 tnl = TiledNeighborList(voxel_width, n_atoms(sys));
 interacting_tiles = Tile[]
 forces = zeros(Float32, n_atoms(sys), 3);
