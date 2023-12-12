@@ -180,6 +180,7 @@ function force_kernel!(tile_forces_i, tile_forces_j, tile_energies_i, tiles,
     r, box_sizes, atom_flags, potential::Function, interaction_threshold::Int32, r_ij, F_ij)
 
     # CUDA.Const(atom_flags) #*not sure this does much
+    # CUDA.Const(tiles)
 
     tile = tiles[blockIdx().x]
     atom_i_idx = tile.i_index_range.start + (threadIdx().x - 1)
@@ -217,13 +218,13 @@ function force_kernel!(tile_forces_i, tile_forces_j, tile_energies_i, tiles,
             diagonal_tile_kernel(r, tile.i_index_range.start, tile.j_index_range.start,
                 box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, tile_energies_i, potential,
                 r_ij, F_ij)
-        elseif n_interactions <= interaction_threshold
-            partial_tile_kernel(r, tile, atom_flags, box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, 
-                tile_energies_i, potential, r_ij, F_ij)
-        else
-            full_tile_kernel(r, tile.i_index_range.start, tile.j_index_range.start,
-                 box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, 
-                tile_energies_i, potential,r_ij, F_ij)
+        # elseif n_interactions <= interaction_threshold
+        #     partial_tile_kernel(r, tile, atom_flags, box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, 
+        #         tile_energies_i, potential, r_ij, F_ij)
+        # else
+        #     full_tile_kernel(r, tile.i_index_range.start, tile.j_index_range.start,
+        #          box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, 
+        #         tile_energies_i, potential,r_ij, F_ij)
         end
     end
 
@@ -233,15 +234,12 @@ end
 
 #box_sizes assumes rectangular box
 function calculate_force!(tnl::TiledNeighborList, sys::System, interacting_tiles::Vector{Tile},
-     potential::Function, forces::Matrix, energies::Matrix, box_sizes, r_cut, r_skin, sort_atoms::Bool,
-      check_box_interactions::Bool; interaction_threshold = Int32(12))
+     potential::Function, forces::Matrix, energies::Matrix, box_sizes, r_cut, r_skin,
+     update_neighbor_list::Bool; interaction_threshold = Int32(12))
 
-    if sort_atoms
+    if update_neighbor_list
         sys, tnl = spatially_sort_atoms!(sys, tnl)
         tnl = build_bounding_boxes!(tnl, sys)
-    end
-
-    if check_box_interactions
         tnl = find_interacting_tiles!(tnl, sys, r_cut, r_skin)
         interacting_tiles = tnl.tiles[tnl.tile_interactions] #allocation
     end
@@ -249,8 +247,8 @@ function calculate_force!(tnl::TiledNeighborList, sys::System, interacting_tiles
     N_tiles_interacting = length(interacting_tiles)
     print("$(N_tiles_interacting) tiles interacting\n")
 
-    #Launch CUDA kernel #& pre-allocate all these things outside of loop
-    r = CuArray{Float32}(positions(sys))
+    #Launch CUDA kernel
+    r = CuArray{Float32}(reduce(hcat, positions(sys))') #*does this make another alloc?
     atom_flags = CuArray{Bool}(tnl.atom_flags)
     cu_interacting_tiles = CuArray{Tile}(interacting_tiles)
     tile_forces_i_GPU = CUDA.zeros(Float32, (N_tiles_interacting, WARP_SIZE, 3))

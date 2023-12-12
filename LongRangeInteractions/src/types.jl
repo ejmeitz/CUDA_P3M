@@ -18,7 +18,8 @@ end
 
 struct System{P,L} #Make <: AbstractSystem{3} in future
     atoms::StructArray{Atom}
-    positions::Matrix{P}
+    # positions::Matrix{P}
+    positions::Vector{Vector{P}}
     lattice_vec::Vector{Vector{L}}
 end
 
@@ -41,9 +42,9 @@ function System(atoms, positions, lattice_vec::Vector{Vector{L}}) where {L}
 end
 
 positions(s::System) = s.positions
-positions(s::System, i::Integer) = view(s.positions,i,:)
-positions(s::System, slice::UnitRange{<:Integer}) = view(s.positions, slice, :)
-positions(s::System, slice::UnitRange{<:Integer}, i::Integer) = view(s.positions, slice, i)
+positions(s::System, i::Integer) = view(s.positions,i)
+positions(s::System, slice::UnitRange{<:Integer}) = view(s.positions, slice)
+# positions(s::System, slice::UnitRange{<:Integer}, i::Integer) = view(s.positions, slice, i)
 
 
 masses(s::System) = s.atoms.mass

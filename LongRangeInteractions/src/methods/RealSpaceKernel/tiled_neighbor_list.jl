@@ -117,6 +117,10 @@ end
 
 ##### Functions for Updating Neighbor List #####
 
+function get_voxel_assignment(r, voxel_width)
+    return floor.(Int, r ./ voxel_width) .+ 1
+end
+
 """
 Assigns atoms into voxels. 
 **ASSUMES ORIGIN IS (0,0,0) and SYSTEM IS CUBIC/RECTANGULAR**
@@ -125,7 +129,7 @@ function assign_atoms_to_voxels!(tnl::TiledNeighborList, sys::System)
     
     N_atoms = n_atoms(sys)
     for i in 1:N_atoms
-        tnl.voxel_assignments[i,:] .= floor.(Int, positions(sys, i) ./ tnl.voxel_width) .+ 1
+        tnl.voxel_assignments[i,:] .= get_voxel_assignment(positions(sys, i), tnl.voxel_width)
     end
     return tnl
 end
@@ -166,10 +170,15 @@ end
 function spatially_sort_atoms!(sys::System, tnl::TiledNeighborList)
 
     n_voxels_per_dim = ceil.(Int, norm.(sys.lattice_vec) ./ tnl.voxel_width)
-    tnl = assign_atoms_to_voxels!(tnl, sys)
+    # tnl = assign_atoms_to_voxels!(tnl, sys)
     voxels_sorted = spatially_sort_voxels(n_voxels_per_dim)
 
     sort!(sys.atoms, by = atom -> voxels_sorted[tnl.voxel_assignments[atom.index,:]])
+    sort!(sys.positions, by = r -> voxels_sorted[get_voxel_assignment(r, tnl.voxel_width)])
+
+    for i in 1:n_atoms(sys)
+        sys.atoms[i].index = i
+    end
 
     return sys, tnl
 end
@@ -182,6 +191,7 @@ function build_bounding_boxes!(tnl::TiledNeighborList, sys::System)
     for block_idx in 1:tnl.n_blocks
         lower_idx, upper_idx = get_block_idx_range(block_idx, N_atoms)
 
+        #&re-work with new indexing
         xmin = minimum(positions(sys, lower_idx:upper_idx, 1))
         ymin = minimum(positions(sys, lower_idx:upper_idx, 2))
         zmin = minimum(positions(sys, lower_idx:upper_idx, 3))
