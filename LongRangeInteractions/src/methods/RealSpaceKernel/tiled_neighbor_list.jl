@@ -19,6 +19,7 @@ struct BoundingBox
     bb_min::NTuple{3,Float64}
     bb_max::NTuple{3,Float64}
 end
+
 xmin(bb::BoundingBox) = bb.bb_min[1]
 ymin(bb::BoundingBox) = bb.bb_min[2]
 zmin(bb::BoundingBox) = bb.bb_min[3]
