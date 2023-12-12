@@ -1,9 +1,9 @@
 export TiledNeighborList, Tile
 
-const global WARP_SIZE = 32
+const global WARP_SIZE::Int64 = 32
 #kernel assumes ATOM_BLOCK_SIZE is a power of 2
-const global ATOM_BLOCK_SIZE = WARP_SIZE #this is not refering to CUDA block size
-const global INTERACTIONS_PER_TILE = ATOM_BLOCK_SIZE*ATOM_BLOCK_SIZE
+const global ATOM_BLOCK_SIZE::Int64 = WARP_SIZE #this is not refering to CUDA block size
+const global INTERACTIONS_PER_TILE::Int64 = ATOM_BLOCK_SIZE*ATOM_BLOCK_SIZE
 
 #Tile representing interaction between block i and j
 struct Tile
