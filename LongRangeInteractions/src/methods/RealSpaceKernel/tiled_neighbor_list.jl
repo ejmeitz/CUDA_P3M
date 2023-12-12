@@ -9,6 +9,7 @@ const global INTERACTIONS_PER_TILE::Int64 = ATOM_BLOCK_SIZE*ATOM_BLOCK_SIZE
 struct Tile
     i::Int32
     j::Int32
+    idx_1D::Int32
     i_index_range::UnitRange{Int32} #Atom indexes of block i
     j_index_range::UnitRange{Int32} #Atom indexes of block j
 end
@@ -101,7 +102,7 @@ function TiledNeighborList(voxel_width, N_atoms)
         lower_idx_i, upper_idx_i = Int32.(get_block_idx_range(i, N_atoms))
         for j in UnitRange{Int32}(i:N_blocks)
             lower_idx_j, upper_idx_j = Int32.(get_block_idx_range(j, N_atoms))
-            tiles[idx_1D] = Tile(i, j, UnitRange{Int32}(lower_idx_i:upper_idx_i),
+            tiles[idx_1D] = Tile(i, j, idx_1D, UnitRange{Int32}(lower_idx_i:upper_idx_i),
                  UnitRange{Int32}(lower_idx_j:upper_idx_j))
             idx_1D += 1
         end
@@ -185,7 +186,7 @@ function set_atom_flags!(tnl::TiledNeighborList, sys::System, tile::Tile, r_cut)
 
     #* THIS SHOULD BE NEAREST MIRROR ATOM PROBABLY
     for (j, atom_j) in enumerate(eachrow(positions(sys, tile.j_index_range)))
-        tnl.atom_flags[tile.i, j] =  (boxPointDistance(tnl.bounding_boxes[tile.i], atom_j) < r_cut)
+        tnl.atom_flags[tile.idx_1D, j] =  (boxPointDistance(tnl.bounding_boxes[tile.i], atom_j) < r_cut)
     end
 
     return tnl
