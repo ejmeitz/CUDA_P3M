@@ -247,6 +247,7 @@ function calculate_force!(tnl::TiledNeighborList, sys::System, interacting_tiles
     end
 
     N_tiles_interacting = length(interacting_tiles)
+    print("$(N_tiles_interacting) tiles interacting\n")
 
     #Launch CUDA kernel #& pre-allocate all these things outside of loop
     r = CuArray{Float32}(positions(sys))
@@ -275,14 +276,14 @@ function calculate_force!(tnl::TiledNeighborList, sys::System, interacting_tiles
     tile_forces_j_CPU = Array(tile_forces_j_GPU)
     tile_energies_i_CPU = Array(tile_energies_i_GPU)
 
-    # Threads.@threads for tile_idx in 1:N_tiles_interacting
-    #     forces[tnl.tiles[tile_idx].i_index_range] .+= tile_forces_i_CPU[tile_idx]
-    #     energies[tnl.tiles[tile_idx].i_index_range] .+= tile_energies_i_CPU[tile_idx]
-    # end
+    Threads.@threads for tile_idx in 1:N_tiles_interacting
+        forces[interacting_tiles[tile_idx].i_index_range] .+= tile_forces_i_CPU[tile_idx]
+        energies[interacting_tiles[tile_idx].i_index_range] .+= tile_energies_i_CPU[tile_idx]
+    end
 
-    # Threads.@threads for tile_idx in 1:N_tiles_interacting
-    #     forces[tnl.tiles[tile_idx].j_index_range] .+= tile_forces_j_CPU[tile_idx]
-    # end
+    Threads.@threads for tile_idx in 1:N_tiles_interacting
+        forces[interacting_tiles[tile_idx].j_index_range,:] .+= tile_forces_j_CPU[tile_idx]
+    end
 
 
     return tnl, forces
