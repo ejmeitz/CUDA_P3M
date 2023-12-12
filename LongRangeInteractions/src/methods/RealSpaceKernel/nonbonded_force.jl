@@ -44,13 +44,13 @@ end
 end
 
 @inline function full_tile_kernel(r, i_offset, j_offset, box_sizes, tid::Int32, 
-    tile_forces_i, tile_forces_j, tile_energies_i, potential)
+    tile_forces_i, tile_forces_j, tile_energies_i, potential, r_ij, F_ij)
      #Start loop in each thread at a different place
     #* does this cause warp divergence?
     for j in tid:(tid + WARP_SIZE - 1)
         wrapped_j_idx = ((j - 1) & (ATOM_BLOCK_SIZE - 1)) + 1 #equivalent to modulo when ATOM_BLOCK_SIZE is power of 2
 
-        r_ij = r[i_offset + tid] .- r[j_offset + wrapped_j_idx]
+        r_ij .= r[i_offset + tid] .- r[j_offset + wrapped_j_idx]
         nearest_mirror!(r_ij, box_sizes)
 
         dist_ij = CUDA.norm3df(r_ij[1], r_ij[2], r_ij[3])
@@ -63,14 +63,16 @@ end
         F_ij .= F_mag .* (r_ij ./ dist_ij)
 
         #No race conditions as threads in warp execute in step
-        tile_energies_i[tile_idx, tid] += U_ij
-        tile_forces_i[tile_idx, tid, :] += F_ij
-        tile_forces_j[tile_idx, wrapped_j_idx, :] -= F_ij
+        tile_energies_i[blockIdx().x, tid] += U_ij
+        for d in 1:3
+            tile_forces_i[blockIdx().x, tid, d] += F_ij[d]
+            tile_forces_j[blockIdx().x, wrapped_j_idx, d] -= F_ij[d]
+        end
     end
 end
 
 @inline function partial_tile_kernel(r, box_sizes, tid::Int32, tile_forces_i,
-         tile_forces_j, tile_energies_i, potential)
+         tile_forces_j, tile_energies_i, potential, r_ij, F_ij)
 
     F_i = 0.0f32
     U_i = 0.0f32
@@ -80,7 +82,7 @@ end
     
     for j in tile.j_index_range
         if tnl.atom_flags[tile.i, j]
-            r_ij = r[i] .- r[j]
+            r_ij .= r[i] .- r[j]
             nearest_mirror!(r_ij, box_sizes)
 
             dist_ij = CUDA.norm3df(r_ij[1], r_ij[2], r_ij[3])
@@ -105,10 +107,12 @@ end
     end
 
     #Write piece of force for this tile in global mem
-    tile_forces_i[tile_idx, tid, :] = F_i
-    tile_energies_i[tile_idx, tid] = U_i
+    for d in 1:3
+        tile_forces_i[blockIdx().x, tid, d] = F_i[d]
+    end
+    tile_energies_i[blockIdx().x, tid] = U_i
     for j in tile.j_index_range #*move into loop where this got accumulated probably
-        tile_forces_j[tile_idx, j, :] = 0.0 #& get value from reduced matrix
+        tile_forces_j[blockIdx().x, j, :] = 0.0 #& get value from reduced matrix
     end
 end
 
@@ -184,14 +188,15 @@ function force_kernel!(tile_forces_i, tile_forces_j, tile_energies_i, tiles,
             diagonal_tile_kernel(r, tile.i_index_range.start, tile.j_index_range.start,
                 box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, tile_energies_i, potential,
                 r_ij, F_ij)
-        end
         # elseif n_interactions <= interaction_threshold
         #     partial_tile_kernel(r, box_sizes, threadIdx.x, tile_forces_i, tile_forces_j, 
-        #         tile_energies_i, potential)
-        # else 
-        #     full_tile_kernel(r, tile.i_index_range.start, tile.j_index_range.start,
-        #          box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, tile_energies_i, potential)
-        # end
+        #         tile_energies_i, potential, r_ij, F_ij)
+        # end 
+        else
+            full_tile_kernel(r, tile.i_index_range.start, tile.j_index_range.start,
+                 box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, 
+                tile_energies_i, potential,r_ij, F_ij)
+        end
     end
 
     return nothing
