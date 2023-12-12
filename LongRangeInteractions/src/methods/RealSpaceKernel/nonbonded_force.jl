@@ -82,7 +82,7 @@ end
     
     for j in tile.j_index_range
         if tnl.atom_flags[tile.i, j]
-            r_ij .= r[i] .- r[j]
+            r_ij .= r[i_offset + tid] .- r[j_offset + j]
             nearest_mirror!(r_ij, box_sizes)
 
             dist_ij = CUDA.norm3df(r_ij[1], r_ij[2], r_ij[3])
@@ -96,7 +96,9 @@ end
 
             F_i += F_ij
             U_i += U_ij
-            F_j[tid, j] -= F_ij #this needs to be reduced across warp at end
+            for d in 1:3
+                F_j[tid, j, d] -= F_ij[d]#this needs to be reduced across warp at end
+            end
         end
     end
 
@@ -188,10 +190,9 @@ function force_kernel!(tile_forces_i, tile_forces_j, tile_energies_i, tiles,
             diagonal_tile_kernel(r, tile.i_index_range.start, tile.j_index_range.start,
                 box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, tile_energies_i, potential,
                 r_ij, F_ij)
-        # elseif n_interactions <= interaction_threshold
-        #     partial_tile_kernel(r, box_sizes, threadIdx.x, tile_forces_i, tile_forces_j, 
-        #         tile_energies_i, potential, r_ij, F_ij)
-        # end 
+        elseif n_interactions <= interaction_threshold
+            partial_tile_kernel(r, box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, 
+                tile_energies_i, potential, r_ij, F_ij)
         else
             full_tile_kernel(r, tile.i_index_range.start, tile.j_index_range.start,
                  box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, 
