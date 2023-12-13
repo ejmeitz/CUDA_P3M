@@ -27,7 +27,7 @@ end
 
 @inline function LJ_force(r::Float32, ϵ::Float32, σ::Float32)
     k = (σ/r)^6
-    F = -4*ϵ*(12*(k*k/r) + 6*(k/r))
+    F = 4*ϵ*(12*(k*k/r) - 6*(k/r))
     return F
 end
 
@@ -47,6 +47,7 @@ end
 
     r_ijx = 0.0f0; r_ijy = 0.0f0; r_ijz = 0.0f0
     F_ij_x = 0.0f0; F_ij_y = 0.0f0; F_ij_z = 0.0f0
+    U_tot = 0.0f0
 
      #Start loop in each thread at a different place
     #* does this cause warp divergence?
@@ -68,13 +69,13 @@ end
         F_mag = LJ_force(dist_ij, 0.1f0, 3.492f0)
 
         # #Convert F to be directional
-
         F_ij_x = F_mag * (r_ijx / dist_ij)
         F_ij_y = F_mag * (r_ijy / dist_ij)
         F_ij_z = F_mag * (r_ijz / dist_ij)
 
+        U_tot += U_ij
+
         #No race conditions as threads in warp execute in step
-        tile_energies_i[blockIdx().x, tid] += U_ij
         tile_forces_i[blockIdx().x, tid, 1] += F_ij_x
         tile_forces_i[blockIdx().x, tid, 2] += F_ij_y
         tile_forces_i[blockIdx().x, tid, 3] += F_ij_z
@@ -82,6 +83,9 @@ end
         tile_forces_j[blockIdx().x, wrapped_j_idx, 2] -= F_ij_y
         tile_forces_j[blockIdx().x, wrapped_j_idx, 3] -= F_ij_z
     end
+    #*could move forces_i out here too, to minimize writes
+    tile_energies_i[blockIdx().x, tid] = U_tot
+
 end
 
 @inline function partial_tile_kernel(r, tile, atom_flags, box_sizes, tid::Int32, tile_forces_i,
@@ -91,6 +95,7 @@ end
     F_jx = 0.0f0; F_jy = 0.0f0; F_jz = 0.0f0
     F_ij_x = 0.0f0; F_ij_y = 0.0f0; F_ij_z = 0.0f0
     r_ijx = 0.0f0; r_ijy = 0.0f0; r_ijz = 0.0f0
+    U_tot = 0.0f0
     
     count = 0
     for j in tile.j_index_range
@@ -119,8 +124,7 @@ end
 
             F_ix += F_ij_x; F_iy += F_ij_y; F_iz += F_ij_z
             F_jx -= F_ij_x; F_jy -= F_ij_y; F_jz -= F_ij_z
-
-            tile_energies_i[blockIdx().x, tid] += U_ij
+            U_tot += U_ij
 
             # sync_threads() #probably not needed since warp in step
 
@@ -140,6 +144,8 @@ end
         end
     end
 
+    #*might be worht moving inside the loop to save registers, writes probably go async
+    tile_energies_i[blockIdx().x, tid] = U_tot
     tile_forces_i[blockIdx().x, tid, 1] = F_ix
     tile_forces_i[blockIdx().x, tid, 2] = F_iy
     tile_forces_i[blockIdx().x, tid, 3] = F_iz
@@ -172,9 +178,6 @@ end
             U_ij = LJ_potential(dist_ij, 0.1f0, 3.492f0)
             F_mag = LJ_force(dist_ij, 0.1f0, 3.492f0)
 
-            # @cuprintln(r[i_offset + tid - 1,1], " ", r[i_offset + tid - 1,2], " ", r[i_offset + tid - 1,3], " ",i_offset + tid - 1)
-            # @cuprintln(r[j_offset + wrapped_j_idx - 1,1], " ", r[j_offset + wrapped_j_idx - 1,2], " ", r[j_offset + wrapped_j_idx - 1,3], " ",j_offset + wrapped_j_idx - 1)
-            
             # #Convert F to be directional
             F_ij_x = F_mag * (r_ijx / dist_ij)
             F_ij_y = F_mag * (r_ijy / dist_ij)
@@ -198,8 +201,9 @@ end
 function force_kernel!(tile_forces_i, tile_forces_j, tile_energies_i, tiles, 
     r, box_sizes, atom_flags, potential::Function, interaction_threshold::Int32)
 
-    # CUDA.Const(atom_flags) #*not sure this does much
-    # CUDA.Const(tiles)
+    CUDA.Const(atom_flags) #*not sure this does much
+    CUDA.Const(tiles)
+    CUDA.Const(box_sizes)
 
     tile = tiles[blockIdx().x]
     atom_i_idx = tile.i_index_range.start + (threadIdx().x - 1)
@@ -286,7 +290,7 @@ function calculate_force!(tnl::TiledNeighborList, sys::System, interacting_tiles
     tile_forces_i_CPU = Array(tile_forces_i_GPU)
     tile_forces_j_CPU = Array(tile_forces_j_GPU)
     tile_energies_i_CPU = Array(tile_energies_i_GPU)
-
+    println(sum(tile_energies_i_CPU))
     Threads.@threads for tile_idx in 1:N_tiles_interacting
         len = length(interacting_tiles[tile_idx].i_index_range) #last tile doesnt have same length
         forces[interacting_tiles[tile_idx].i_index_range,:] .+= tile_forces_i_CPU[tile_idx,1:len,:]
