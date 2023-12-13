@@ -240,9 +240,9 @@ function force_kernel!(tile_forces_i, tile_forces_j, tile_energies_i, tiles,
         if is_diagonal(tile)
             diagonal_tile_kernel(r, tile.i_index_range.start, tile.j_index_range.start,
                 box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, tile_energies_i, potential)
-        # elseif n_interactions <= interaction_threshold
-        #     partial_tile_kernel(r, tile, atom_flags, box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, 
-        #         tile_energies_i, potential)
+        elseif n_interactions <= interaction_threshold
+            partial_tile_kernel(r, tile, atom_flags, box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, 
+                tile_energies_i, potential)
         else
             full_tile_kernel(r, tile.i_index_range.start, tile.j_index_range.start,
                  box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, 

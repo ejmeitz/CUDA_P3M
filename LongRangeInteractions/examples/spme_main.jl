@@ -11,7 +11,7 @@ include("test.jl")
 include("dump_parser.jl")
 
 #Initialize System from LAMMPS Data
-test_data_path = joinpath(@__DIR__, "..", "test","test_data", "salt_sim_simple_5UC","dump.atom")
+test_data_path = joinpath(@__DIR__, "..", "test","test_data", "salt_sim_simple_9UC","dump.atom")
 trajectory, charges, masses, lammps_coul_energies, lammps_forces_all = load_test_data(test_data_path)
 
 const timer = TimerOutput()
@@ -20,7 +20,7 @@ logger_output = joinpath(@__DIR__, "logs")
 #In salt_sim_simple σ and ϵ are same for all interactions
 const ϵ = 0.1; const σ = 3.492
 potential = (r) -> LJ(r, ϵ, σ)
-L = 28.1
+L = 50.58 
 r_cut_lj = 7.0
 r_cut_real = 10.0
 r_skin = 3.0
@@ -40,7 +40,7 @@ sys = System(atoms, positions, L);
 
 #Build neighbor list
 voxel_width = get_optimal_voxel_width(r_cut_lj, [L,L,L])
-# voxel_width = [L,L,L]./2 #temp
+# voxel_width = [L,L,L]./4 #temp
 tnl = TiledNeighborList(voxel_width, n_atoms(sys));
 interacting_tiles = Tile[]
 forces = zeros(Float32, n_atoms(sys), 3);
