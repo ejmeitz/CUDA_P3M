@@ -7,12 +7,12 @@ abstract type LongRangeInteraction end
 mutable struct Atom{M,C}
     const mass::M
     const charge::C
-    index::Int
+    id::Int
 end
 
-function Atom(mass, index, charge = 0.0u"q")
+function Atom(mass, id, charge = 0.0u"q")
     return Atom{typeof(mass), typeof(charge)}(
-        mass, charge, index
+        mass, charge, id
     )
 end
 

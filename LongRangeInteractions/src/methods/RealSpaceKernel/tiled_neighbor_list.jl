@@ -143,7 +143,7 @@ function check_voxel_counts(tnl, sys)
     N_atoms = n_atoms(sys)
     counts = Dict()
     for i in 1:N_atoms
-        voxel = tnl.voxel_assignments[i,:]
+        voxel = tnl.voxel_assignments[sys.atoms[i].id,:]
         if haskey(counts, voxel)
             counts[voxel] += 1
         else
@@ -178,12 +178,9 @@ function spatially_sort_atoms!(sys::System, tnl::TiledNeighborList)
     voxels_sorted = spatially_sort_voxels(n_voxels_per_dim)
     # print(voxels_sorted)
     #*double calculating voxel assignments rn
-    sort!(sys.atoms, by = atom -> voxels_sorted[tnl.voxel_assignments[atom.index,:]])
+    sort!(sys.atoms, by = atom -> voxels_sorted[tnl.voxel_assignments[atom.id,:]])
     sort!(sys.positions, by = r -> voxels_sorted[get_voxel_assignment(r, tnl.voxel_width)])
 
-    for i in 1:n_atoms(sys)
-        sys.atoms[i].index = i
-    end
 
     return sys, tnl
 end

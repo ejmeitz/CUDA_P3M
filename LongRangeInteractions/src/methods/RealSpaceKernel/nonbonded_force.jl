@@ -55,13 +55,13 @@ end
         wrapped_j_idx = ((j - 1) & (ATOM_BLOCK_SIZE - 1)) + 1 #equivalent to modulo when ATOM_BLOCK_SIZE is power of 2
         j_idx = j_offset + wrapped_j_idx - 1
         if j_idx <= size(r)[1]
-            r_ijx = r[i_offset + tid - 1, 1] - r[j_offset + wrapped_j_idx - 1, 1]
-            r_ijy = r[i_offset + tid - 1, 2] - r[j_offset + wrapped_j_idx - 1, 2]
-            r_ijz = r[i_offset + tid - 1, 3] - r[j_offset + wrapped_j_idx - 1, 3]
+            r_ijx = r[i_offset + tid - 1, 1] - r[j_idx, 1]
+            r_ijy = r[i_offset + tid - 1, 2] - r[j_idx, 2]
+            r_ijz = r[i_offset + tid - 1, 3] - r[j_idx, 3]
 
-            nearest_mirror!(r_ijx, box_sizes[1])
-            nearest_mirror!(r_ijy, box_sizes[2])
-            nearest_mirror!(r_ijz, box_sizes[3])
+            r_ijx = nearest_mirror!(r_ijx, box_sizes[1])
+            r_ijy = nearest_mirror!(r_ijy, box_sizes[2])
+            r_ijz = nearest_mirror!(r_ijz, box_sizes[3])
 
             dist_ij = CUDA.norm3df(r_ijx, r_ijy, r_ijz)
 
@@ -110,9 +110,9 @@ end
             r_ijy = r[tile.i_index_range.start + tid - 1, 2] - r[j, 2]
             r_ijz = r[tile.i_index_range.start + tid - 1, 3] - r[j, 3]
 
-            nearest_mirror!(r_ijx, box_sizes[1])
-            nearest_mirror!(r_ijy, box_sizes[2])
-            nearest_mirror!(r_ijz, box_sizes[3])
+            r_ijx = nearest_mirror!(r_ijx, box_sizes[1])
+            r_ijy = nearest_mirror!(r_ijy, box_sizes[2])
+            r_ijz = nearest_mirror!(r_ijz, box_sizes[3])
 
             dist_ij = CUDA.norm3df(r_ijx, r_ijy, r_ijz)
 
@@ -171,9 +171,9 @@ end
             r_ijz = r[i_offset + tid - 1, 3] - r[j_idx, 3]
 
             #* causes divergence??
-            nearest_mirror!(r_ijx, box_sizes[1])
-            nearest_mirror!(r_ijy, box_sizes[2])
-            nearest_mirror!(r_ijz, box_sizes[3])
+            r_ijx = nearest_mirror!(r_ijx, box_sizes[1])
+            r_ijy = nearest_mirror!(r_ijy, box_sizes[2])
+            r_ijz = nearest_mirror!(r_ijz, box_sizes[3])
 
             dist_ij = CUDA.norm3df(r_ijx, r_ijy, r_ijz)
 
@@ -267,7 +267,7 @@ function calculate_force!(tnl::TiledNeighborList, sys::System, interacting_tiles
     end
 
     N_tiles_interacting = length(interacting_tiles)
-    print("$(N_tiles_interacting) tiles interacting\n")
+    print("$(N_tiles_interacting)/$(length(tnl.tiles)) tiles interacting\n")
 
     #Launch CUDA kernel
     r = CuArray{Float32}(reduce(hcat, positions(sys))') #*does this make another alloc?
@@ -278,7 +278,7 @@ function calculate_force!(tnl::TiledNeighborList, sys::System, interacting_tiles
     tile_energies_i_GPU = CUDA.zeros(Float32, (N_tiles_interacting, WARP_SIZE))
 
     threads_per_block = WARP_SIZE
-    @cuda threads=threads_per_block blocks=N_tiles_interacting force_kernel!(tile_forces_i_GPU, tile_forces_j_GPU,
+    @time CUDA.@sync @cuda threads=threads_per_block blocks=N_tiles_interacting force_kernel!(tile_forces_i_GPU, tile_forces_j_GPU,
          tile_energies_i_GPU, cu_interacting_tiles, r, CuArray{Float32}(box_sizes), atom_flags, potential,
           interaction_threshold)
 
@@ -292,14 +292,14 @@ function calculate_force!(tnl::TiledNeighborList, sys::System, interacting_tiles
     tile_forces_j_CPU = Array(tile_forces_j_GPU)
     tile_energies_i_CPU = Array(tile_energies_i_GPU)
     println(sum(tile_energies_i_CPU))
-    Threads.@threads for tile_idx in 1:N_tiles_interacting
+    for tile_idx in 1:N_tiles_interacting
         len = length(interacting_tiles[tile_idx].i_index_range) #last tile doesnt have same length
         forces[interacting_tiles[tile_idx].i_index_range,:] .+= tile_forces_i_CPU[tile_idx,1:len,:]
         energies[interacting_tiles[tile_idx].i_index_range] .+= tile_energies_i_CPU[tile_idx,1:len]
 
     end
 
-    Threads.@threads for tile_idx in 1:N_tiles_interacting
+    for tile_idx in 1:N_tiles_interacting
         len = length(interacting_tiles[tile_idx].j_index_range)
         forces[interacting_tiles[tile_idx].j_index_range,:] .+= tile_forces_j_CPU[tile_idx,1:len,:]
     end

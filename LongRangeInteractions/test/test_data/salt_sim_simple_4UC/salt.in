@@ -1,0 +1,44 @@
+# LAMMPS input script for NaCl crystal simulation with real units
+
+units real
+dimension 3
+boundary p p p
+
+# Atom definition
+atom_style charge
+read_data salt4UC.positions
+
+# Define groups
+group Na type 1
+group Cl type 2
+
+# Set up pair style and coefficients
+pair_style lj/cut/coul/long 7.0 10.0
+kspace_style ewald 1e-5
+
+#THIS IS NOT REAL JUST FOR SIMPLICITY IN PROJECT
+pair_coeff 1 1 0.1 3.492
+pair_coeff 1 2 0.1 3.492
+pair_coeff 2 2 0.1 3.492
+
+
+timestep 2.0 
+
+compute 1 all pe/atom
+compute 2 all pair lj/cut/coul/long ecoul
+compute 3 all pair lj/cut/coul/long evdwl
+compute 4 all pe
+variable elong equal elong
+
+
+variable T equal 300
+velocity all create ${T} 31454 dist gaussian mom yes
+
+
+# Run simulation
+fix 1 all nve
+dump data all custom 10000 dump.atom id q mass x y z fx fy fz c_1
+dump_modify data format line "%d %.4f %.4f %.9f %.9f %.9f %.9f %.9f %.9f %9f"
+fix eng_print all print 10000 "$(c_2) $(v_elong) $(c_3) $(c_4)" file energy_breakdown.txt
+dump_modify data sort id
+run 100000
