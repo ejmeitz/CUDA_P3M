@@ -251,7 +251,7 @@ end
 
 #box_sizes assumes rectangular box
 function calculate_force!(tnl::TiledNeighborList, sys::System, interacting_tiles::Vector{Tile},
-     potential::Function, forces::Matrix, energies::Matrix, box_sizes, r_cut, r_skin,
+     potential::Function, forces::Matrix, energies::Vector, box_sizes, r_cut, r_skin,
      update_neighbor_list::Bool; interaction_threshold = Int32(12))
 
     if update_neighbor_list
@@ -288,12 +288,15 @@ function calculate_force!(tnl::TiledNeighborList, sys::System, interacting_tiles
     tile_energies_i_CPU = Array(tile_energies_i_GPU)
 
     Threads.@threads for tile_idx in 1:N_tiles_interacting
-        forces[interacting_tiles[tile_idx].i_index_range] .+= tile_forces_i_CPU[tile_idx]
-        energies[interacting_tiles[tile_idx].i_index_range] .+= tile_energies_i_CPU[tile_idx]
+        len = length(interacting_tiles[tile_idx].i_index_range) #last tile doesnt have same length
+        forces[interacting_tiles[tile_idx].i_index_range,:] .+= tile_forces_i_CPU[tile_idx,1:len,:]
+        energies[interacting_tiles[tile_idx].i_index_range] .+= tile_energies_i_CPU[tile_idx,1:len]
+
     end
 
     Threads.@threads for tile_idx in 1:N_tiles_interacting
-        forces[interacting_tiles[tile_idx].j_index_range,:] .+= tile_forces_j_CPU[tile_idx]
+        len = length(interacting_tiles[tile_idx].j_index_range)
+        forces[interacting_tiles[tile_idx].j_index_range,:] .+= tile_forces_j_CPU[tile_idx,1:len,:]
     end
 
 

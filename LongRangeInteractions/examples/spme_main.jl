@@ -43,7 +43,7 @@ voxel_width = get_optimal_voxel_width(r_cut_lj, [L,L,L])
 tnl = TiledNeighborList(voxel_width, n_atoms(sys));
 interacting_tiles = Tile[]
 forces = zeros(Float32, n_atoms(sys), 3);
-energies = zeros(Float32, n_atoms(sys), 3);
+energies = zeros(Float32, n_atoms(sys));
 
 # #Run SPME on system
 i = 1;
