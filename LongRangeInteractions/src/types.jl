@@ -4,9 +4,9 @@ export Atom, System, SPME, SingleThread, CPU, SingleGPU, MultiGPU,
 
 abstract type LongRangeInteraction end
 
-struct Atom{M,C}
-    mass::M
-    charge::C
+mutable struct Atom{M,C}
+    const mass::M
+    const charge::C
     index::Int
 end
 
@@ -30,7 +30,7 @@ function System(atoms, positions, L)
     end
     lattice_vec = [[L,0,0],[0,L,0],[0,0,L]]
 
-    return System{eltype(positions),typeof(L)}(atoms, positions, lattice_vec)
+    return System{eltype(positions[1]),typeof(L)}(atoms, positions, lattice_vec)
 end
 
 function System(atoms, positions, lattice_vec::Vector{Vector{L}}) where {L}
@@ -42,7 +42,7 @@ function System(atoms, positions, lattice_vec::Vector{Vector{L}}) where {L}
 end
 
 positions(s::System) = s.positions
-positions(s::System, i::Integer) = view(s.positions,i)
+positions(s::System, i::Integer) = s.positions[i]
 positions(s::System, slice::UnitRange{<:Integer}) = view(s.positions, slice)
 # positions(s::System, slice::UnitRange{<:Integer}, i::Integer) = view(s.positions, slice, i)
 

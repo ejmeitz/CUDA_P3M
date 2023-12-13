@@ -117,6 +117,10 @@ end
 
 ##### Functions for Updating Neighbor List #####
 
+"""
+Assigns atoms into voxels. 
+**ASSUMES ORIGIN IS (0,0,0) and SYSTEM IS CUBIC/RECTANGULAR**
+"""
 function get_voxel_assignment(r, voxel_width)
     return floor.(Int, r ./ voxel_width) .+ 1
 end
@@ -170,9 +174,10 @@ end
 function spatially_sort_atoms!(sys::System, tnl::TiledNeighborList)
 
     n_voxels_per_dim = ceil.(Int, norm.(sys.lattice_vec) ./ tnl.voxel_width)
-    # tnl = assign_atoms_to_voxels!(tnl, sys)
+    tnl = assign_atoms_to_voxels!(tnl, sys)
     voxels_sorted = spatially_sort_voxels(n_voxels_per_dim)
-
+    # print(voxels_sorted)
+    #*double calculating voxel assignments rn
     sort!(sys.atoms, by = atom -> voxels_sorted[tnl.voxel_assignments[atom.index,:]])
     sort!(sys.positions, by = r -> voxels_sorted[get_voxel_assignment(r, tnl.voxel_width)])
 
@@ -191,13 +196,12 @@ function build_bounding_boxes!(tnl::TiledNeighborList, sys::System)
     for block_idx in 1:tnl.n_blocks
         lower_idx, upper_idx = get_block_idx_range(block_idx, N_atoms)
 
-        #&re-work with new indexing
-        xmin = minimum(positions(sys, lower_idx:upper_idx, 1))
-        ymin = minimum(positions(sys, lower_idx:upper_idx, 2))
-        zmin = minimum(positions(sys, lower_idx:upper_idx, 3))
-        xmax = maximum(positions(sys, lower_idx:upper_idx, 1))
-        ymax = maximum(positions(sys, lower_idx:upper_idx, 2))
-        zmax = maximum(positions(sys, lower_idx:upper_idx, 3))
+        xmin = minimum(getindex.(positions(sys, lower_idx:upper_idx), 1))
+        ymin = minimum(getindex.(positions(sys, lower_idx:upper_idx), 2))
+        zmin = minimum(getindex.(positions(sys, lower_idx:upper_idx), 3))
+        xmax = maximum(getindex.(positions(sys, lower_idx:upper_idx), 1))
+        ymax = maximum(getindex.(positions(sys, lower_idx:upper_idx), 2))
+        zmax = maximum(getindex.(positions(sys, lower_idx:upper_idx), 3))
 
         tnl.bounding_boxes[block_idx] = BoundingBox((xmin, ymin, zmin), (xmax, ymax, zmax))
     end
@@ -210,7 +214,7 @@ end
 function set_atom_flags!(tnl::TiledNeighborList, sys::System, tile::Tile, r_cut)
 
     #* THIS SHOULD BE NEAREST MIRROR ATOM PROBABLY
-    for (j, atom_j) in enumerate(eachrow(positions(sys, tile.j_index_range)))
+    for (j, atom_j) in enumerate(positions(sys, tile.j_index_range))
         tnl.atom_flags[tile.idx_1D, j] =  (boxPointDistance(tnl.bounding_boxes[tile.i], atom_j) < r_cut)
     end
 

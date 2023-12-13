@@ -31,6 +31,7 @@ N_atoms = length(charges)
 
 #JUST RUN ONE SET OF POSITIONS
 positions = trajectory[:,:,1]
+positions = [positions[i,:] for i in 1:size(positions)[1]]
 
 #Stores data so that positions are contiguous in memory etc. 
 atoms = StructArray{Atom}(mass=masses, charge=charges, index=collect(1:N_atoms))
@@ -38,7 +39,7 @@ sys = System(atoms, positions, L)
 
 #Build neighbor list
 voxel_width = get_optimal_voxel_width(r_cut_lj, [L,L,L])
-voxel_width = [L,L,L]./2 #temp
+# voxel_width = [L,L,L]./2 #temp
 tnl = TiledNeighborList(voxel_width, n_atoms(sys));
 interacting_tiles = Tile[]
 forces = zeros(Float32, n_atoms(sys), 3);
