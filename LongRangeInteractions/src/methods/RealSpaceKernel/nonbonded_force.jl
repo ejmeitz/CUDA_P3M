@@ -53,35 +53,37 @@ end
     #* does this cause warp divergence?
     for j in tid:(tid + WARP_SIZE - 1)
         wrapped_j_idx = ((j - 1) & (ATOM_BLOCK_SIZE - 1)) + 1 #equivalent to modulo when ATOM_BLOCK_SIZE is power of 2
+        j_idx = j_offset + wrapped_j_idx - 1
+        if j_idx <= size(r)[1]
+            r_ijx = r[i_offset + tid - 1, 1] - r[j_offset + wrapped_j_idx - 1, 1]
+            r_ijy = r[i_offset + tid - 1, 2] - r[j_offset + wrapped_j_idx - 1, 2]
+            r_ijz = r[i_offset + tid - 1, 3] - r[j_offset + wrapped_j_idx - 1, 3]
 
-        r_ijx = r[i_offset + tid - 1, 1] - r[j_offset + wrapped_j_idx - 1, 1]
-        r_ijy = r[i_offset + tid - 1, 2] - r[j_offset + wrapped_j_idx - 1, 2]
-        r_ijz = r[i_offset + tid - 1, 3] - r[j_offset + wrapped_j_idx - 1, 3]
+            nearest_mirror!(r_ijx, box_sizes[1])
+            nearest_mirror!(r_ijy, box_sizes[2])
+            nearest_mirror!(r_ijz, box_sizes[3])
 
-        nearest_mirror!(r_ijx, box_sizes[1])
-        nearest_mirror!(r_ijy, box_sizes[2])
-        nearest_mirror!(r_ijz, box_sizes[3])
+            dist_ij = CUDA.norm3df(r_ijx, r_ijy, r_ijz)
 
-        dist_ij = CUDA.norm3df(r_ijx, r_ijy, r_ijz)
+            #*figure out how to abstract this
+            U_ij = LJ_potential(dist_ij, 0.1f0, 3.492f0)
+            F_mag = LJ_force(dist_ij, 0.1f0, 3.492f0)
 
-        #*figure out how to abstract this
-        U_ij = LJ_potential(dist_ij, 0.1f0, 3.492f0)
-        F_mag = LJ_force(dist_ij, 0.1f0, 3.492f0)
+            # #Convert F to be directional
+            F_ij_x = F_mag * (r_ijx / dist_ij)
+            F_ij_y = F_mag * (r_ijy / dist_ij)
+            F_ij_z = F_mag * (r_ijz / dist_ij)
 
-        # #Convert F to be directional
-        F_ij_x = F_mag * (r_ijx / dist_ij)
-        F_ij_y = F_mag * (r_ijy / dist_ij)
-        F_ij_z = F_mag * (r_ijz / dist_ij)
+            U_tot += U_ij
 
-        U_tot += U_ij
-
-        #No race conditions as threads in warp execute in step
-        tile_forces_i[blockIdx().x, tid, 1] += F_ij_x
-        tile_forces_i[blockIdx().x, tid, 2] += F_ij_y
-        tile_forces_i[blockIdx().x, tid, 3] += F_ij_z
-        tile_forces_j[blockIdx().x, wrapped_j_idx, 1] -= F_ij_x
-        tile_forces_j[blockIdx().x, wrapped_j_idx, 2] -= F_ij_y
-        tile_forces_j[blockIdx().x, wrapped_j_idx, 3] -= F_ij_z
+            #No race conditions as threads in warp execute in step
+            tile_forces_i[blockIdx().x, tid, 1] += F_ij_x
+            tile_forces_i[blockIdx().x, tid, 2] += F_ij_y
+            tile_forces_i[blockIdx().x, tid, 3] += F_ij_z
+            tile_forces_j[blockIdx().x, wrapped_j_idx, 1] -= F_ij_x
+            tile_forces_j[blockIdx().x, wrapped_j_idx, 2] -= F_ij_y
+            tile_forces_j[blockIdx().x, wrapped_j_idx, 3] -= F_ij_z
+        end
     end
     #*could move forces_i out here too, to minimize writes
     tile_energies_i[blockIdx().x, tid] = U_tot
@@ -161,11 +163,12 @@ end
 
     for j in tid:(tid + WARP_SIZE - 1)
         wrapped_j_idx = ((j - 1) & (ATOM_BLOCK_SIZE - 1)) + 1#equivalent to modulo when ATOM_BLOCK_SIZE is power of 2
-        if wrapped_j_idx < tid #Avoid double counting, causes warp divergence
+        j_idx = j_offset + wrapped_j_idx - 1
+        if wrapped_j_idx < tid && j_idx <= size(r)[1]
 
-            r_ijx = r[i_offset + tid - 1, 1] - r[j_offset + wrapped_j_idx - 1, 1]
-            r_ijy = r[i_offset + tid - 1, 2] - r[j_offset + wrapped_j_idx - 1, 2]
-            r_ijz = r[i_offset + tid - 1, 3] - r[j_offset + wrapped_j_idx - 1, 3]
+            r_ijx = r[i_offset + tid - 1, 1] - r[j_idx, 1]
+            r_ijy = r[i_offset + tid - 1, 2] - r[j_idx, 2]
+            r_ijz = r[i_offset + tid - 1, 3] - r[j_idx, 3]
 
             #* causes divergence??
             nearest_mirror!(r_ijx, box_sizes[1])
@@ -237,9 +240,9 @@ function force_kernel!(tile_forces_i, tile_forces_j, tile_energies_i, tiles,
         if is_diagonal(tile)
             diagonal_tile_kernel(r, tile.i_index_range.start, tile.j_index_range.start,
                 box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, tile_energies_i, potential)
-        elseif n_interactions <= interaction_threshold
-            partial_tile_kernel(r, tile, atom_flags, box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, 
-                tile_energies_i, potential)
+        # elseif n_interactions <= interaction_threshold
+        #     partial_tile_kernel(r, tile, atom_flags, box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, 
+        #         tile_energies_i, potential)
         else
             full_tile_kernel(r, tile.i_index_range.start, tile.j_index_range.start,
                  box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, 
