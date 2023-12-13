@@ -11,7 +11,7 @@ include("test.jl")
 include("dump_parser.jl")
 
 #Initialize System from LAMMPS Data
-test_data_path = joinpath(@__DIR__, "..", "test","test_data", "salt_sim_simple_8UC","dump.atom")
+test_data_path = joinpath(@__DIR__, "..", "test","test_data", "salt_sim_simple_9UC","dump.atom")
 trajectory, charges, masses, lammps_coul_energies, lammps_forces_all = load_test_data(test_data_path)
 
 const timer = TimerOutput()
