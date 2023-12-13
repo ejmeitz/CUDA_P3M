@@ -30,6 +30,24 @@ function load_test_data(test_data_path)
     return trajectory, charges, masses, coul_energies, forces_all
 end
 
+
+function apply_pbc!(r::Vector{Vector{Float64}}, L)
+    for i in eachindex(r)
+        if r[i][1] < 0 || r[i][1] > L
+            r[i][1] = r[i][1] - sign(r[i][1])*L
+        end
+        if r[i][2] < 0 || r[i][2] > L
+            r[i][2] = r[i][2] - sign(r[i][2])*L
+        end
+        if r[i][3] < 0 || r[i][3] > L
+            r[i][3] = r[i][3] - sign(r[i][3])*L
+        end
+
+    end
+    return r
+
+end
+
 function compare_to_lammps(lammps_forces, lammps_energies, my_forces, my_energies)
 
 end

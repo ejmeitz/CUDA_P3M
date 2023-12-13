@@ -5,7 +5,8 @@ using StructArrays
 using StaticArrays
 using TimerOutputs
 using Unitful
-using BijectiveHilbert 
+using BijectiveHilbert
+using BenchmarkTools 
 # using Adapt
 
 using CUDA #this should be conditionally loaded if TargetDevice is a GPU
