@@ -207,10 +207,8 @@ function force_kernel!(tile_forces_i, tile_forces_j, tile_energies_i, tiles,
 
     tile = tiles[blockIdx().x]
     atom_i_idx = tile.i_index_range.start + (threadIdx().x - 1)
-    # @cuprintln("Tile Idx: $atom_i_idx")
-
-    #* avoid out of bounds accesses on last tile or when tid is high...
-    if atom_i_idx < size(r)[1]
+    
+    if atom_i_idx <= size(r)[1]
 
         # Each thread loads its own atom data and the 32 atoms it is responble for into SHMEM
         atom_data_i = CuStaticSharedArray(Float32, (ATOM_BLOCK_SIZE, 3))
@@ -235,7 +233,7 @@ function force_kernel!(tile_forces_i, tile_forces_j, tile_energies_i, tiles,
             n_interactions += atom_flags[tile.idx_1D, j]
         end
 
-        #* EVERY THREAD NEEDS OWN R_IJ/F_ij
+        #* HOW TO CHECK IF J IS IN BOUNDS INSIDE EACH KERNEL?
         if is_diagonal(tile)
             diagonal_tile_kernel(r, tile.i_index_range.start, tile.j_index_range.start,
                 box_sizes, threadIdx().x, tile_forces_i, tile_forces_j, tile_energies_i, potential)
