@@ -53,10 +53,16 @@ BC = calc_BC(spme)
 BC_cuda = CuArray{Float32}(BC)
 Q_cuda = CuArray{Float32}(Q)
 Q_inv = fft(Q_cuda)
-Q_inv *= BC_cuda
+Q_inv .= BC_cuda
 Q_conv_theta = ifft(Q_inv)
-Q_conv = Array(Q_conv_theta)
 
+E = 0.5 * sum(real(Q_conv_theta) .* real(Q_cuda))
+
+
+
+
+
+return E
 
 
 @benchmark interpolate_charge!($Q, $dQdr, $spme)

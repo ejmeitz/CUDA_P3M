@@ -78,6 +78,9 @@ def dMdu(u,n):
 # Make this non-allocating
 # Make this not use np.exp(j) just manage cos() and sin() manually
 def b(m, K, n): #n is spline order
+    if n % 2 == 1:
+        if 2 * np.abs(m) == K:
+            return 0
     m_K = m/K
     num = np.exp(2*np.pi*1j*(n-1)*m_K)
     denom = np.sum([M(k+1, n)*np.exp(2*np.pi*1j*k*m_K) for k in range(n-1)])
@@ -109,7 +112,6 @@ def calc_BC(alpha, V, K1, K2, K3, n, recip_lat):
                 
                 B3 = B2*abs2(b(m3,K3,n))
                 C = calc_C(alpha, V, hs, recip_lat)
-
                 BC[m1,m2,m3] = B3*C
 
     return BC
@@ -191,14 +193,16 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
 
     BC = calc_BC(alpha, V, K1, K2, K3, spline_interp_order, recip_lat)
 
+    print(np.max(np.abs(BC)))
 
-    # Q_inv = np.fft.ifftn(np.complex128(Q))
-    # Q_inv *= BC
-    # Q_conv_theta = np.fft.fftn(Q_inv)
 
-    Q_inv = np.fft.fftn(np.complex128(Q))
+    Q_inv = np.fft.ifftn(np.complex128(Q))
     Q_inv *= BC
-    Q_conv_theta = np.fft.ifftn(Q_inv)
+    Q_conv_theta = np.fft.fftn(Q_inv)
+
+    # Q_inv = np.fft.fftn(np.complex128(Q))
+    # Q_inv *= BC
+    # Q_conv_theta = np.fft.ifftn(Q_inv)
 
 
     E_out = 0.5*np.sum(np.real(Q_conv_theta) * np.real(Q))
@@ -270,7 +274,7 @@ def rms_error(a, b):
 if __name__ == "__main__":
 
     r_cut_lj = 7.0 #needs to be less then 8 for box size w/ 3 UC
-    r_cut_real = 10.0 #kinda picked randomly, does this need to be less than L/2?
+    r_cut_real = 7.0 #kinda picked randomly, does this need to be less than L/2?
     r_cut_neighbor = r_cut_real + 1.0 #not sure what this should be
     error_tol = 1e-4 #GPU OpenMM warns 5e-5 is lower limit and error can start going up (should check when we do GPU)
     spline_interp_order = 5 #OpenMM uses 5
