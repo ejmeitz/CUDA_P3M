@@ -42,12 +42,12 @@ function reciprocal_vecs_twopi(lat_vecs)
 end
 
 #Assumes Vector of Vectors for r and recip_vectors
-function scaled_fractional_coords(r, n_mesh::AbstractVector, recip_vectors)
+function scaled_fractional_coords!(u, r, n_mesh::AbstractVector, recip_vectors)
 
     #*this type wont work with unitful but whatever
-    u = [Vector{Float64}(undef, (length(n_mesh), )) for _ in eachindex(r)]
+    # u = [Vector{Float64}(undef, (length(n_mesh), )) for _ in eachindex(r)]
     
-    for i in eachindex(r)
+    Threads.@threads for i in eachindex(r)
         for dim in eachindex(n_mesh)
             u[i][dim] = n_mesh[dim]*dot(recip_vectors[dim], r[i])
         end

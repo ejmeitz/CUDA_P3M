@@ -7,6 +7,7 @@ using TimerOutputs
 using Unitful
 using BijectiveHilbert
 using BenchmarkTools 
+using LoopVectorization
 # using Adapt
 
 using CUDA #this should be conditionally loaded if TargetDevice is a GPU

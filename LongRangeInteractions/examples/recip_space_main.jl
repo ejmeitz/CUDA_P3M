@@ -7,12 +7,14 @@ using TimerOutputs
 using DataFrames
 using BenchmarkTools
 using StructArrays
+using CUDA
+using FFTW
 
 include("test.jl")
 include("dump_parser.jl")
 
 #Initialize System from LAMMPS Data
-test_data_path = joinpath(@__DIR__, "..", "test","test_data", "salt_sim_simple","dump.atom")
+test_data_path = joinpath(@__DIR__, "..", "test","test_data", "salt_sim_simple_4UC","dump.atom")
 trajectory, charges, masses, lammps_coul_energies, lammps_forces_all = load_test_data(test_data_path)
 
 const timer = TimerOutput()
@@ -39,16 +41,20 @@ positions = apply_pbc!(positions, L)
 atoms = StructArray{Atom}(mass=masses, charge=charges, id=collect(1:N_atoms));
 sys = System(atoms, positions, L);
 
-err_tol = 1e-4
+err_tol = 1e-5
 n = 6
 spme = SPME(sys, SingleThread(), err_tol, r_cut_real, n);
 
-#Pre-allocate Q and dQdr
+#Pre-allocate Q and dQdr and u
 Q = zeros(n_mesh(spme)...);
-dQdr = zeros(N_atoms, 3, n_mesh(spme)...);
+dQdr = zeros(N_atoms, 3, n_mesh(spme)...); #* this is a huge array with fine meshes
+u = [Vector{Float64}(undef, (length(n_mesh(spme)), )) for _ in eachindex(positions)];
 
-BC = calc_BC(spme)
-interpolate_charge!(Q, dQdr, spme) #* gives slightly different results than Python??
+BC = calc_BC(spme);
+# @btime interpolate_charge!(u, Q, dQdr, spme); #& this one way faster but I broke something
+
+# Q2 = zeros(n_mesh(spme)...);
+interpolate_charge2!(Q, dQdr, spme) #* gives slightly different results than Python??
 
 @benchmark CUDA.@sync begin
 
