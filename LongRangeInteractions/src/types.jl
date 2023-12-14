@@ -88,6 +88,7 @@ struct SPME{TD, T, R, B, E, L} <: LongRangeInteraction
     self_energy::E
     K::SVector{3,Integer}
     spline_order::Integer
+    recip_lat::Vector{Vector{L}}
 end
 
 function SPME(sys, target_device, error_tol, r_cut_dir, spline_order)
@@ -95,6 +96,7 @@ function SPME(sys, target_device, error_tol, r_cut_dir, spline_order)
     self_energy = -(β/sqrt(π))*sum(x -> x*x, charges(sys))
     K = ceil.(Int, 2*β*box_size(sys)/(3*(error_tol ^ 0.2)))
 
+    recip_lat = reciprocal_vecs(sys.lattice_vec)
 
     return SPME{typeof(target_device), typeof(error_tol),
              typeof(r_cut_dir), typeof(β), typeof(self_energy), eltype(recip_lat[1])}(

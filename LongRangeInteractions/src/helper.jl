@@ -41,6 +41,19 @@ function reciprocal_vecs_twopi(lat_vecs)
     return [m1,m2,m3]
 end
 
+function scaled_fractional_coords(r::Vector{Vector{T}}, n_mesh::Vector,
+         recip_vectors::Vector{Vector}) where {T}
+
+    u = [Vector{T}(undef, (length(n_mesh), )) for _ in eachindex(r)]
+    
+    for i in eachindex(r)
+        for dim in eachindex(n_mesh)
+            u[i,dim] = n_mesh[dim]*dot(recip_vectors[dim], r[i])
+        end
+    end
+    
+end
+
 #ASSUMES CUBIC BOX
 function get_optimal_voxel_width(r_cut, box_sizes)
 
