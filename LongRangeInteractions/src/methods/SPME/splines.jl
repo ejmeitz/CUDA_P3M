@@ -19,6 +19,10 @@ function dMdu(u,n)
 end
 
 function b(mⱼ,n,Kⱼ)
+    if iseven(n) && (2*abs(mⱼ) == Kⱼ) #interp fails in this case
+        return 0.0
+    end
+
     m_K = 2*π*mⱼ/Kⱼ
     v = m_K*(n-1)
     num = cos(v) + 1im*sin(v)

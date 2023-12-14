@@ -40,7 +40,7 @@ atoms = StructArray{Atom}(mass=masses, charge=charges, id=collect(1:N_atoms));
 sys = System(atoms, positions, L);
 
 err_tol = 1e-4
-n = 5
+n = 6
 spme = SPME(sys, SingleThread(), err_tol, r_cut_real, n);
 
 #Pre-allocate Q and dQdr
@@ -48,24 +48,19 @@ Q = zeros(n_mesh(spme)...);
 dQdr = zeros(N_atoms, 3, n_mesh(spme)...);
 
 BC = calc_BC(spme)
+interpolate_charge!(Q, dQdr, spme) #* gives slightly different results than Python??
 
+@benchmark CUDA.@sync begin
 
-BC_cuda = CuArray{Float32}(BC)
-Q_cuda = CuArray{Float32}(Q)
-Q_inv = fft(Q_cuda)
-Q_inv .= BC_cuda
-Q_conv_theta = ifft(Q_inv)
+    BC_cuda = CuArray{Float32}(BC)
+    Q_cuda = CuArray{Float32}(Q)
+    Q_inv = fft(Q_cuda)
+    Q_inv .*= BC_cuda
+    Q_conv_theta = ifft(Q_inv)
 
-E = 0.5 * sum(real(Q_conv_theta) .* real(Q_cuda))
-
-
-
-
-
-return E
-
-
-@benchmark interpolate_charge!($Q, $dQdr, $spme)
+    A = 332.0637132991921
+    E = 0.5 * A* sum(real(Q_conv_theta) .* real(Q_cuda))
+end
 
 
 #Save timing data to file

@@ -193,7 +193,8 @@ def particle_mesh(r, q, real_lat, alpha, spline_interp_order, mesh_dims):
 
     BC = calc_BC(alpha, V, K1, K2, K3, spline_interp_order, recip_lat)
 
-    print(np.max(np.abs(BC)))
+    print(np.max(np.abs(Q)))
+    # print(np.max(np.abs(BC)))
 
 
     Q_inv = np.fft.ifftn(np.complex128(Q))
@@ -247,10 +248,10 @@ def PME(r, q, real_lat_vec, error_tol, r_cut_real, spline_interp_order):
 
     A = 332.0637132991921
 
-    # print(f"PP Energy: {np.sum(pp_energy*A)}")
-    # print(f"PM Energy {pm_energy*A}")
-    # print(f"Self Energy {self_eng*A}")
-    # print(f"Total Ewald Eng {(np.sum(pp_energy) + pm_energy + self_eng)*A}")
+    print(f"PP Energy: {np.sum(pp_energy*A)}")
+    print(f"PM Energy {pm_energy*A}")
+    print(f"Self Energy {self_eng*A}")
+    print(f"Total Ewald Eng {(np.sum(pp_energy) + pm_energy + self_eng)*A}")
 
     U_SPME_total = (np.sum(pp_energy) + pm_energy + self_eng)*A
     F_SPME = (pp_force + pm_force)*A
@@ -277,7 +278,7 @@ if __name__ == "__main__":
     r_cut_real = 7.0 #kinda picked randomly, does this need to be less than L/2?
     r_cut_neighbor = r_cut_real + 1.0 #not sure what this should be
     error_tol = 1e-4 #GPU OpenMM warns 5e-5 is lower limit and error can start going up (should check when we do GPU)
-    spline_interp_order = 5 #OpenMM uses 5
+    spline_interp_order = 6 #OpenMM uses 5
 
 
     dump_path = os.path.join(r"../test_data/salt_sim/dump.atom")
