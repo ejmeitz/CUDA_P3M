@@ -48,7 +48,7 @@ function LJ_NaCl(r)
     return LJ(r, ep, sig)
 end
 
-#To calculate LJ part of interaction
+# To calculate LJ part of interaction
 function lj_energy_loop(positions, charges, box_sizes, r_cut_real)
     N_atoms = len(charges)
 
