@@ -1,3 +1,5 @@
+export calc_BC
+
 function M(u, n)
     if n > 2
         return (u/(n-1))*M(u,n-1) + ((n-u)/(n-1))*M(u-1,n-1)
@@ -34,13 +36,13 @@ function abs2(x::Complex)
     return (real(x)^2) + (imag(x)^2)
 end
 
-function calc_BC(sys::System, spme::SPME)
-    V = vol(sys)
+function calc_BC(spme::SPME)
+    V = vol(spme.sys)
     K1, K2, K3 = n_mesh(spme)
-    recip_lat = reciprocal_lattice(lattice_vec(sys)) #SPME uses the 1 normalized version
+    recip_lat = reciprocal_lattice(spme) #SPME uses the 1 normalized version
     n = spline_order(spme)
 
-    BC = zeros(Complex64, K1, K2, K3)
+    BC = zeros(ComplexF64, K1, K2, K3)
     hs = [0.0, 0.0, 0.0]
 
     for m1 in 0:K1-1

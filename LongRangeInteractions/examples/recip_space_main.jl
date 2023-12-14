@@ -47,6 +47,8 @@ spme = SPME(sys, SingleThread(), err_tol, r_cut_real, n);
 Q = zeros(n_mesh(spme)...);
 dQdr = zeros(N_atoms, 3, n_mesh(spme)...);
 
+BC = calc_BC(spme)
+
 @benchmark interpolate_charge!($Q, $dQdr, $spme)
 
 
