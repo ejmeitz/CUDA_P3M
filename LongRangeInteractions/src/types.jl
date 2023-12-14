@@ -1,6 +1,6 @@
 #High-level types, all specific interaction types are in the methods folder
 export Atom, System, SPME, SingleThread, CPU, SingleGPU, MultiGPU,
-    n_atoms, positions
+    n_atoms, positions, n_mesh
 
 abstract type LongRangeInteraction end
 
@@ -94,14 +94,15 @@ end
 function SPME(sys, target_device, error_tol, r_cut_dir, spline_order)
     β = sqrt(-log(2*error_tol))/r_cut_dir
     self_energy = -(β/sqrt(π))*sum(x -> x*x, charges(sys))
-    K = ceil.(Int, 2*β*box_size(sys)/(3*(error_tol ^ 0.2)))
+    box_sizes = norm.(lattice_vec(sys))
+    K = ceil.(Int, 2*β.*box_sizes./(3*(error_tol ^ 0.2)))
 
     recip_lat = reciprocal_vecs(sys.lattice_vec)
 
     return SPME{typeof(target_device), typeof(error_tol),
              typeof(r_cut_dir), typeof(β), typeof(self_energy), eltype(recip_lat[1])}(
-                sys, target_device, error_tol, r_cut_dir, β, self_energy, recip_lat, K,
-                spline_order)
+                sys, target_device, error_tol, r_cut_dir, β, self_energy, K,
+                spline_order, recip_lat)
 end
 
 reciprocal_lattice(spme::SPME) = spme.recip_lat

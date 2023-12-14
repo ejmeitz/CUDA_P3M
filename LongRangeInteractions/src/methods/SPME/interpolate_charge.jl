@@ -1,16 +1,11 @@
 function interpolate_charge!(Q, dQdr, spme::SPME{SingleThread})
-
-end
-
-
-function interpolate_charge!(Q, dQdr, sys::System, spme::SPME{SingleThread})
     K1,K2,K3 = n_mesh(spme)
     recip_lat = reciprocal_lattice(spme)
-    charges = charges(sys)
+    charges = charges(spme.sys)
     N_atoms = len(charges)
     n = spme.spline_order
 
-    u = scaled_fractional_coords(sys, spme)
+    u = scaled_fractional_coords(positions(spme.sys), n_mesh(spme), recip_lat)
     
     # Q = zeros(K1, K2, K3)
     # dQdr = zeros(N_atoms, 3, K1, K2, K3) #deriv in real space
