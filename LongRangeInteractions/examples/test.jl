@@ -19,7 +19,7 @@ function load_test_data(test_data_path)
 
         parse_next_timestep!(data, ld, file, collect(1:N_cols))
 
-        #Makes copies but this isnt in the timed section
+        # Makes copies but this isnt in the timed section
         trajectory[:,:,i] .= data[:,4:6]
         forces_all[:,:,i] .= data[:,7:9]
         coul_energies[:,i] .= data[:,N_cols]

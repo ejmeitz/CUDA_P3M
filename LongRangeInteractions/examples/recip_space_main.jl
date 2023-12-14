@@ -49,6 +49,16 @@ dQdr = zeros(N_atoms, 3, n_mesh(spme)...);
 
 BC = calc_BC(spme)
 
+
+BC_cuda = CuArray{Float32}(BC)
+Q_cuda = CuArray{Float32}(Q)
+Q_inv = fft(Q_cuda)
+Q_inv *= BC_cuda
+Q_conv_theta = ifft(Q_inv)
+Q_conv = Array(Q_conv_theta)
+
+
+
 @benchmark interpolate_charge!($Q, $dQdr, $spme)
 
 
