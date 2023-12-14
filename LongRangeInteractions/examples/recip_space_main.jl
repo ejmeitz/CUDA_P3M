@@ -5,6 +5,7 @@ Pkg.resolve();Pkg.instantiate()
 using LongRangeInteractions
 using TimerOutputs
 using DataFrames
+using BenchmarkTools
 using StructArrays
 
 include("test.jl")
@@ -46,6 +47,7 @@ spme = SPME(sys, SingleThread(), err_tol, r_cut_real, n);
 Q = zeros(n_mesh(spme)...);
 dQdr = zeros(N_atoms, 3, n_mesh(spme)...);
 
+@benchmark interpolate_charge!($Q, $dQdr, $spme)
 
 
 #Save timing data to file

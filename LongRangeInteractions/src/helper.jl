@@ -41,17 +41,18 @@ function reciprocal_vecs_twopi(lat_vecs)
     return [m1,m2,m3]
 end
 
-function scaled_fractional_coords(r::Vector{Vector{T}}, n_mesh::Vector,
-         recip_vectors::Vector{Vector}) where {T}
+#Assumes Vector of Vectors for r and recip_vectors
+function scaled_fractional_coords(r, n_mesh::AbstractVector, recip_vectors)
 
-    u = [Vector{T}(undef, (length(n_mesh), )) for _ in eachindex(r)]
+    #*this type wont work with unitful but whatever
+    u = [Vector{Float64}(undef, (length(n_mesh), )) for _ in eachindex(r)]
     
     for i in eachindex(r)
         for dim in eachindex(n_mesh)
-            u[i,dim] = n_mesh[dim]*dot(recip_vectors[dim], r[i])
+            u[i][dim] = n_mesh[dim]*dot(recip_vectors[dim], r[i])
         end
     end
-    
+    return u
 end
 
 #ASSUMES CUBIC BOX
