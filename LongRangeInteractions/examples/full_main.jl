@@ -14,7 +14,7 @@ include("test.jl")
 include("dump_parser.jl")
 
 #Initialize System from LAMMPS Data
-test_data_path = joinpath(@__DIR__, "..", "test","test_data", "salt_sim_simple_9UC","dump.atom")
+test_data_path = joinpath(@__DIR__, "..", "test","test_data", "salt_sim_simple","dump.atom")
 trajectory, charges, masses, lammps_coul_energies, lammps_forces_all = load_test_data(test_data_path)
 
 const timer = TimerOutput()
@@ -24,10 +24,10 @@ logger_output = joinpath(@__DIR__, "logs")
 const ϵ = 0.1; const σ = 3.492
 potential = (r) -> LJ(r, ϵ, σ)
 a = 5.62
-n_uc = 9
+n_uc = 3
 L = n_uc*a
 r_cut_lj = 7.0
-r_cut_real = 7.0
+r_cut_real = 10.0
 r_skin = 3.0
 N_atoms = length(charges)
 
@@ -48,13 +48,13 @@ n = 6
 spme = SPME(sys, SingleThread(), err_tol, r_cut_real, n);
 BC = calc_BC(spme);
 
-
-# #& CPU VERSION OF Q
-# #Pre-allocate Q and dQdr and u
-# Q = zeros(n_mesh(spme)...);
-# dQdr = zeros(N_atoms, 3, n_mesh(spme)...); #* this is a huge array with fine meshes
-# u = [Vector{Float64}(undef, (length(n_mesh(spme)), )) for _ in eachindex(positions)];
-# interpolate_charge!(u, Q, dQdr, spme); #* gives slightly different results than Python??
+#Build neighbor list
+voxel_width = get_optimal_voxel_width(r_cut_lj, [L,L,L])
+# voxel_width = [L,L,L]./4 #temp
+tnl = TiledNeighborList(voxel_width, n_atoms(sys));
+interacting_tiles = Tile[]
+forces = zeros(Float32, n_atoms(sys), 3);
+energies = zeros(Float32, n_atoms(sys));
 
 #& GPU version of Q
 u2 = [Vector{Float64}(undef, (length(n_mesh(spme)), )) for _ in eachindex(positions)];
@@ -72,19 +72,23 @@ BC_cuda = CuArray{Float32}(BC)
 
 thread_per_block = 64
 N_blocks = ceil(Int64, N_atoms/thread_per_block)
-@benchmark CUDA.@sync begin
+
+@btime begin
+
+    CUDA.@sync calculate_force!(tnl, sys, interacting_tiles,
+        potential, forces, energies, [L,L,L], r_cut_lj, r_skin, true);
+
     @cuda threads=thread_per_block blocks=N_blocks interpolate_charge_kernel!(cu_u, cuM0, cuM1, cuM2, cuQ, 
         n_half,cuCharges, n_mesh(spme)..., n, N_atoms)
-end
 
-@benchmark CUDA.@sync begin
+
     Q_inv = fft(cuQ)
     Q_inv .*= BC_cuda
-    Q_inv = ifft!(Q_inv) # Q_conv_theta, but do in place
+    Q_conv_theta = ifft(Q_inv); # Q_conv_theta, but do in place
 
     A = 332.0637132991921
-    E = 0.5 * A* sum(real(Q_inv) .* real(cuQ))
-end
+    E = 0.5 * A* sum(real(Q_conv_theta) .* real(cuQ))
+end;
 
 
 #Save timing data to file

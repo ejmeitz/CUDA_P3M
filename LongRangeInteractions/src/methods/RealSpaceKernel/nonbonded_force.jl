@@ -267,7 +267,7 @@ function calculate_force!(tnl::TiledNeighborList, sys::System, interacting_tiles
     end
 
     N_tiles_interacting = length(interacting_tiles)
-    print("$(N_tiles_interacting)/$(length(tnl.tiles)) tiles interacting\n")
+    # print("$(N_tiles_interacting)/$(length(tnl.tiles)) tiles interacting\n")
 
     #Launch CUDA kernel
     r = CuArray{Float32}(reduce(hcat, positions(sys))') #*does this make another alloc?
@@ -278,20 +278,20 @@ function calculate_force!(tnl::TiledNeighborList, sys::System, interacting_tiles
     tile_energies_i_GPU = CUDA.zeros(Float32, (N_tiles_interacting, WARP_SIZE))
 
     threads_per_block = WARP_SIZE
-    @time CUDA.@sync @cuda threads=threads_per_block blocks=N_tiles_interacting force_kernel!(tile_forces_i_GPU, tile_forces_j_GPU,
+    @cuda threads=threads_per_block blocks=N_tiles_interacting force_kernel!(tile_forces_i_GPU, tile_forces_j_GPU,
          tile_energies_i_GPU, cu_interacting_tiles, r, CuArray{Float32}(box_sizes), atom_flags, potential,
           interaction_threshold)
 
 
-    println("==============")
-    println("KERNEL COMPLETED")
-    println("==============")
+    # println("==============")
+    # println("KERNEL COMPLETED")
+    # println("==============")
 
     #Copy forces and energy back to CPU and reduce
     tile_forces_i_CPU = Array(tile_forces_i_GPU)
     tile_forces_j_CPU = Array(tile_forces_j_GPU)
     tile_energies_i_CPU = Array(tile_energies_i_GPU)
-    println(sum(tile_energies_i_CPU))
+    # println(sum(tile_energies_i_CPU))
     for tile_idx in 1:N_tiles_interacting
         len = length(interacting_tiles[tile_idx].i_index_range) #last tile doesnt have same length
         forces[interacting_tiles[tile_idx].i_index_range,:] .+= tile_forces_i_CPU[tile_idx,1:len,:]
