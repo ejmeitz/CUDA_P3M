@@ -303,7 +303,8 @@
       simula- tions, but also the maturity of the Julia ecosystem for GPU
       programming. In the salt system tested, the GPU routinely outperformed the
       LAMMPS program when the system had more than 1000 atoms with a maximum
-      speed up of 6x for the 9 unit cell system. In the future, we would like to
+      speed up of 6x for the 9 unit cell system. The main bottleneck in our code is the FFT implementation which has NlogN scaling.
+      This kernel cannot be optimized much as it is part of the CUDA library; however, we can hide that computational cost by performing computation on the CPU at the same time or by using multiple GPUs. In the future, we would like to
       add support for multiple GPU’s and also make it agnostic of which GPU
       back-end is used (e.g. CUDA vs. AMD). Furthermore, optimizing the
       real-space kernel would have benefits beyond SPME. This kernel is
