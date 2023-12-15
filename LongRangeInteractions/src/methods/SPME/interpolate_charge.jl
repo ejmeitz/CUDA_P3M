@@ -27,7 +27,7 @@ function calc_spline_values(u, n, N_atoms)
 end
 
 
-function interpolate_charge!(u, Q, dQdr, spme::SPME{SingleThread})
+function interpolate_charge2!(u, Q, dQdr, spme::SPME{SingleThread})
     K1,K2,K3 = n_mesh(spme)
     recip_lat = reciprocal_lattice(spme)
     N_atoms = n_atoms(spme.sys)
@@ -92,7 +92,7 @@ function interpolate_charge!(u, Q, dQdr, spme::SPME{SingleThread})
 end
 
 
-function interpolate_charge2!(Q, dQdr, spme::SPME{SingleThread})
+function interpolate_charge!(Q, dQdr, spme::SPME{SingleThread})
     K1,K2,K3 = n_mesh(spme)
     recip_lat = reciprocal_lattice(spme)
     q_arr = charges(spme.sys)
