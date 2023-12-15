@@ -14,7 +14,7 @@ include("test.jl")
 include("dump_parser.jl")
 
 #Initialize System from LAMMPS Data
-test_data_path = joinpath(@__DIR__, "..", "test","test_data", "salt_sim_simple_4UC","dump.atom")
+test_data_path = joinpath(@__DIR__, "..", "test","test_data", "salt_sim_simple_5UC","dump.atom")
 trajectory, charges, masses, lammps_coul_energies, lammps_forces_all = load_test_data(test_data_path)
 
 const timer = TimerOutput()
@@ -44,17 +44,35 @@ sys = System(atoms, positions, L);
 err_tol = 1e-5
 n = 6
 spme = SPME(sys, SingleThread(), err_tol, r_cut_real, n);
+BC = calc_BC(spme);
 
+
+#& CPU VERSION OF Q
 #Pre-allocate Q and dQdr and u
 Q = zeros(n_mesh(spme)...);
 dQdr = zeros(N_atoms, 3, n_mesh(spme)...); #* this is a huge array with fine meshes
 u = [Vector{Float64}(undef, (length(n_mesh(spme)), )) for _ in eachindex(positions)];
+interpolate_charge!(u, Q, dQdr, spme); #* gives slightly different results than Python??
 
-BC = calc_BC(spme);
-# @btime interpolate_charge!(u, Q, dQdr, spme); #& this one way faster but I broke something
+#& GPU version of Q
+u2 = [Vector{Float64}(undef, (length(n_mesh(spme)), )) for _ in eachindex(positions)];
+u2 = scaled_fractional_coords!(u2, spme.sys.positions, n_mesh(spme), spme.recip_lat);
+M0, M1, M2, _, _, _ = calc_spline_values(u2, n, N_atoms);
+cuQ = CUDA.zeros(Float32,n_mesh(spme)...);
 
-# Q2 = zeros(n_mesh(spme)...);
-interpolate_charge2!(Q, dQdr, spme) #* gives slightly different results than Python??
+cuM0 = CuArray{Float32}(M0);
+cuM1 = CuArray{Float32}(M1);
+cuM2 = CuArray{Float32}(M2);
+n_half = ceil(Int64,n/2);
+cu_u = CuArray{Float32}(reduce(hcat, u2)'); #try transposing
+cuCharges = CuArray{Int32}(spme.sys.atoms.charge);
+
+thread_per_block = 128
+N_blocks = ceil(Int64, N_atoms/thread_per_block)
+# @btime CUDA.@sync begin
+    @cuda threads=thread_per_block blocks=N_blocks interpolate_charge_kernel!(cu_u, cuM0, cuM1, cuM2, cuQ, 
+        n_half,cuCharges, n_mesh(spme)..., n, N_atoms)
+# end
 
 @benchmark CUDA.@sync begin
 

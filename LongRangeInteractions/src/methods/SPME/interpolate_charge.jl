@@ -1,4 +1,4 @@
-export interpolate_charge!, interpolate_charge2!
+export interpolate_charge!, interpolate_charge2!, interpolate_charge_kernel!,calc_spline_values
 
 function calc_spline_values(u, n, N_atoms)
 
@@ -26,7 +26,7 @@ function calc_spline_values(u, n, N_atoms)
     return M0, M1, M2, dM0, dM1, dM2
 end
 
-
+#*broke this one trying to remove allocations
 function interpolate_charge2!(u, Q, dQdr, spme::SPME{SingleThread})
     K1,K2,K3 = n_mesh(spme)
     recip_lat = reciprocal_lattice(spme)
@@ -92,14 +92,14 @@ function interpolate_charge2!(u, Q, dQdr, spme::SPME{SingleThread})
 end
 
 
-function interpolate_charge!(Q, dQdr, spme::SPME{SingleThread})
+function interpolate_charge!(u, Q, dQdr, spme::SPME{SingleThread})
     K1,K2,K3 = n_mesh(spme)
     recip_lat = reciprocal_lattice(spme)
     q_arr = charges(spme.sys)
     N_atoms = length(q_arr)
     n = spme.spline_order
 
-    u = scaled_fractional_coords(positions(spme.sys), n_mesh(spme), recip_lat)
+    u = scaled_fractional_coords!(u, positions(spme.sys), n_mesh(spme), recip_lat)
 
 
     for i in 1:N_atoms
@@ -160,6 +160,62 @@ function interpolate_charge!(Q, dQdr, spme::SPME{SingleThread})
     end
     
     return Q, dQdr
+end
+
+
+function interpolate_charge_kernel!(u, Mx_vals, My_vals, Mz_vals, Q, 
+    n_half, charges, K1, K2, K3, n, N_atoms)
+
+
+    i = (blockIdx().x - 1i32) * blockDim().x + threadIdx().x
+
+
+    if i <= N_atoms
+        #Load atom data into thread registers
+        u_ix = round(Int32,u[i,1])
+        u_iy = round(Int32,u[i,2])
+        u_iz = round(Int32,u[i,3])
+        q = charges[i]
+        l0 = 0i32; l1 = 0i32; l2 = 0i32;
+        for c0 in 0:n
+            l0 = u_ix - c0 # Grid point to interpolate onto
+
+
+            l0 += n_half # Shift
+            if l0 < 0 # Apply PBC
+                l0 += K1
+            elseif l0 >= K1
+                l0 -= K1
+            end
+
+            for c1 in 0:n
+                l1 = u_iy - c1 # Grid point to interpolate onto
+
+                l1 += n_half # Shift
+                if l1 < 0 # Apply PBC
+                    l1 += K2
+                elseif l1 >= K2
+                    l1 -= K2
+                end
+                
+                for c2 in 0:n
+                    l2 = u_iz - c2 # Grid point to interpolate onto
+
+                    l2 += n_half # Shift
+                    if l2 < 0 # Apply PBC
+                        l2 += K3
+                    elseif l2 >= K3
+                        l2 -= K3
+                    end
+
+                    v = q*Mx_vals[i,c0+1]*My_vals[i,c1+1]*Mz_vals[i,c2+1]
+                    # CUDA.atomic_add!(Q[l0+1,l1+1,l2+1], v)
+                    CUDA.@atomic Q[l0+1,l1+1,l2+1] += v
+                end
+            end
+        end
+    end
+
 end
                     
 # function interpolate_charge!(Q, dQdr, spme::SPME{CPU{N}}) where {N}

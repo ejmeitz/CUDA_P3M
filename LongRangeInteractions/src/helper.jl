@@ -1,4 +1,4 @@
-export get_optimal_voxel_width
+export get_optimal_voxel_width, scaled_fractional_coords!
 
 function get_N_cells(lattice_vecs::Vector{Vector{<:Real}}, r_cut)
     axb = cross(lattice_vecs[1], lattice_vecs[2])
